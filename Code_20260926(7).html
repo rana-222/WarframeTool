@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warframe 裂罅计算器</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+
+    <!-- 左侧垂直导航标签 -->
+    <nav class="main-sidebar" id="mainSidebar">
+        <button class="sidebar-toggle" id="sidebarToggle" title="展开/收起">
+            <span class="toggle-icon">«</span>
+        </button>
+        <button class="main-tab active" data-tab="fissures">
+            <span class="tab-icon">⚡</span>
+            <span class="tab-label">虚空裂缝</span>
+        </button>
+        <button class="main-tab" data-tab="calc">
+            <span class="tab-icon">📊</span>
+            <span class="tab-label">裂罅计算</span>
+        </button>
+        <button class="main-tab" data-tab="arbitrations">
+            <span class="tab-icon">🎯</span>
+            <span class="tab-label">仲裁队列</span>
+        </button>
+        <button class="main-tab" data-tab="relics">
+            <span class="tab-icon">💎</span>
+            <span class="tab-label">遗物计算</span>
+        </button>
+        <button class="main-tab" data-tab="market">
+            <span class="tab-icon">💰</span>
+            <span class="tab-label">物品价格</span>
+        </button>
+        <button class="main-tab" data-tab="subscriptions">
+            <span class="tab-icon">🔔</span>
+            <span class="tab-label">订阅提醒</span>
+        </button>
+    </nav>
+
+    <div class="tab-content-wrap">
+        <!-- 标签页1：虚空裂缝 -->
+        <section class="tab-pane active" id="tab-fissures">
+            <div class="fissures-container">
+                <div class="ws-tabs">
+                    <button class="ws-tab active" data-fissure-type="normal">普通</button>
+                    <button class="ws-tab" data-fissure-type="steel">钢铁</button>
+                </div>
+                <div class="ws-list" id="fissuresList">
+                    <div class="ws-empty">加载中…</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 标签页2：裂罅计算器 -->
+        <section class="tab-pane" id="tab-calc">
+            <main class="card calc-card">
+                <div class="top-badge">● Warframe 玩家工具</div>
+                <h3>Warframe <mark>裂罅紫卡</mark> 词条计算器</h3>
+                <div class="mode-select">
+                    <div class="seg-wrap">
+                        <label><input type="radio" name="mode" value="forward" onclick="switchMode()"><span>正向计算</span></label>
+                        <label><input type="radio" name="mode" value="reverse" checked onclick="switchMode()"><span>反向计算</span></label>
+                    </div>
+                </div>
+
+                <!-- 正向面板 -->
+                <div id="forwardPanel" class="panel" style="display:none">
+                    <div class="item">
+                        <label>词条类型</label>
+                        <div class="combobox-wrap">
+                            <input class="combobox-input" type="text" id="statInputF" placeholder="输入关键词搜索，点击展开全部">
+                            <div class="combobox-dropdown" id="dropdownF"></div>
+                            <input type="hidden" id="statValueF">
+                        </div>
+                    </div>
+                    <div class="item">
+                        <label>武器类型</label>
+                        <div class="combobox-wrap">
+                            <input class="combobox-input" type="text" id="weaponInputF" placeholder="输入关键词搜索，点击展开全部">
+                            <div class="combobox-dropdown" id="weaponDropdownF"></div>
+                            <input type="hidden" id="weaponValueF">
+                        </div>
+                    </div>
+                    <div class="item">
+                        <label>属性组合修正系数</label>
+                        <div class="combobox-wrap">
+                            <input class="combobox-input" type="text" id="propInputF" readonly placeholder="点击展开选项">
+                            <div class="combobox-dropdown" id="propDropdownF"></div>
+                            <input type="hidden" id="propValueF">
+                        </div>
+                    </div>
+                    <div class="item" id="customPropForward" style="display:none">
+                        <label>自定义属性系数</label>
+                        <input type="number" step="0.0001" id="propCoef" min="0" placeholder="手动输入系数">
+                    </div>
+                    <div class="item">
+                        <label>裂罅倾向系数</label>
+                        <input type="number" step="0.01" id="riftCoef" min="0.1" max="2" placeholder="如0.69">
+                    </div>
+                    <div class="item">
+                        <label>浮动系数(0.9‑1.1)</label>
+                        <input type="number" step="0.01" id="floatCoef" min="0.9" max="1.1" placeholder="如1.10">
+                    </div>
+                </div>
+
+                <!-- 反向面板【默认打开】 -->
+                <div id="reversePanel" class="panel">
+                    <div class="item">
+                        <label>词条类型</label>
+                        <div class="combobox-wrap">
+                            <input class="combobox-input" type="text" id="statInputR" placeholder="输入关键词搜索，点击展开全部">
+                            <div class="combobox-dropdown" id="dropdownR"></div>
+                            <input type="hidden" id="statValueR">
+                        </div>
+                    </div>
+                    <div class="item">
+                        <label>武器类型</label>
+                        <div class="combobox-wrap">
+                            <input class="combobox-input" type="text" id="weaponInputR" placeholder="输入关键词搜索，点击展开全部">
+                            <div class="combobox-dropdown" id="weaponDropdownR"></div>
+                            <input type="hidden" id="weaponValueR">
+                        </div>
+                    </div>
+                    <div class="item">
+                        <label>裂罅等级</label>
+                        <div class="combobox-wrap">
+                            <input class="combobox-input" type="text" id="riftLvInputR" readonly placeholder="点击展开选项">
+                            <div class="combobox-dropdown" id="riftLvDropdownR"></div>
+                            <input type="hidden" id="riftLvValueR">
+                        </div>
+                    </div>
+                    <div class="item">
+                        <label>词条属性类型</label>
+                        <div class="seg-wrap danger radio-row">
+                            <label><input type="radio" name="statTypeR" value="positive" checked><span>正向词条</span></label>
+                            <label><input type="radio" name="statTypeR" value="negative"><span>负面词条</span></label>
+                        </div>
+                        <label>最终词条数值</label>
+                        <input type="number" step="0.01" id="finalVal" min="0" placeholder="填刷出来的成品数值">
+                    </div>
+                    <div class="item">
+                        <label>属性组合修正系数</label>
+                        <div class="combobox-wrap">
+                            <input class="combobox-input" type="text" id="propInputR" readonly placeholder="点击展开选项">
+                            <div class="combobox-dropdown" id="propDropdownR"></div>
+                            <input type="hidden" id="propValueR">
+                        </div>
+                    </div>
+                    <div class="item" id="customPropReverse" style="display:none">
+                        <label>自定义属性系数</label>
+                        <input type="number" step="0.0001" id="propCoefR" min="0" placeholder="手动输入系数">
+                    </div>
+                    <p class="tip">浮动系数固定范围：0.9 ~ 1.1</p>
+                </div>
+
+                <button onclick="calc()">计算</button>
+                <div id="result"></div>
+            </main>
+        </section>
+
+        <!-- 标签页3：仲裁任务队列 -->
+        <section class="tab-pane" id="tab-arbitrations">
+            <div class="arbitrations-container">
+                <!-- 日历 -->
+                <div class="calendar-wrap">
+                    <div class="cal-header">
+                        <button class="cal-nav" id="calPrev">‹</button>
+                        <span class="cal-title" id="calTitle"></span>
+                        <button class="cal-nav" id="calNext">›</button>
+                    </div>
+                    <div class="cal-weekdays">
+                        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                    </div>
+                    <div class="cal-grid" id="calGrid"></div>
+                </div>
+                <!-- 等级筛选 -->
+                <div class="level-filter">
+                    <button class="lv-btn active" data-level="all">全部</button>
+                    <button class="lv-btn" data-level="common">普通</button>
+                    <button class="lv-btn" data-level="excellent">优秀</button>
+                    <button class="lv-btn" data-level="legendary">传奇</button>
+                </div>
+                <!-- 当日仲裁列表 -->
+                <div class="ws-list" id="arbitrationsList">
+                    <div class="ws-empty">加载中…</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 标签页4：遗物价格计算 -->
+        <section class="tab-pane" id="tab-relics">
+            <div class="relics-container">
+                <div class="relic-search-row">
+                    <div class="relic-search-wrap">
+                        <input type="text" id="relicSearch" placeholder="搜索遗物（如 Axi A1、Lith K7）..." autocomplete="off">
+                        <div class="relic-dropdown" id="relicDropdown"></div>
+                    </div>
+                    <div class="relic-refine-group">
+                        <label class="relic-refine-opt"><input type="radio" name="relicRefine" value="intact" checked><span>完整</span></label>
+                        <label class="relic-refine-opt"><input type="radio" name="relicRefine" value="exceptional"><span>优良</span></label>
+                        <label class="relic-refine-opt"><input type="radio" name="relicRefine" value="flawless"><span>无瑕</span></label>
+                        <label class="relic-refine-opt"><input type="radio" name="relicRefine" value="radiant"><span>光辉</span></label>
+                    </div>
+                </div>
+                <div class="relic-result" id="relicResult">
+                    <div class="ws-empty">请选择一个遗物查看价格分析</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 标签页5：物品价格查询 -->
+        <section class="tab-pane" id="tab-market">
+            <div class="relics-container">
+                <div class="relic-search-row">
+                    <div class="relic-search-wrap">
+                        <input type="text" id="marketSearch" placeholder="搜索物品（中英文均可，如 flow / 川流不息）..." autocomplete="off">
+                        <div class="relic-dropdown" id="marketDropdown"></div>
+                    </div>
+                </div>
+                <div class="relic-result" id="marketResult">
+                    <div class="ws-empty">请输入物品名称进行搜索</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 标签页6：订阅提醒 -->
+        <section class="tab-pane" id="tab-subscriptions">
+            <div class="subscriptions-container">
+                <div class="sub-add-card">
+                    <h3 class="sub-section-title">添加订阅</h3>
+                    <div class="sub-form">
+                        <div class="sub-row">
+                            <label>任务类型</label>
+                            <div class="sub-type-group">
+                                <label class="sub-type-opt"><input type="radio" name="subType" value="fissure" checked onchange="onSubTypeChange()"><span>钢铁裂缝</span></label>
+                                <label class="sub-type-opt"><input type="radio" name="subType" value="arbitration" onchange="onSubTypeChange()"><span>仲裁任务</span></label>
+                            </div>
+                        </div>
+                        <div class="sub-row">
+                            <label>星球</label>
+                            <select id="subPlanet"></select>
+                        </div>
+                        <div class="sub-row">
+                            <label>任务类型</label>
+                            <select id="subMission"></select>
+                        </div>
+                        <div class="sub-row" id="subAdvanceRow">
+                            <label>提醒时机</label>
+                            <div class="sub-advance-group">
+                                <label class="sub-type-opt"><input type="radio" name="subAdvance" value="30"><span>提前半小时</span></label>
+                                <label class="sub-type-opt"><input type="radio" name="subAdvance" value="10"><span>提前十分钟</span></label>
+                                <label class="sub-type-opt"><input type="radio" name="subAdvance" value="0" checked><span>准时提醒</span></label>
+                            </div>
+                        </div>
+                        <div class="sub-row">
+                            <label>通知方式</label>
+                            <div class="sub-notify-group">
+                                <label class="sub-type-opt"><input type="radio" name="subNotify" value="message" checked><span>仅消息通知</span></label>
+                                <label class="sub-type-opt"><input type="radio" name="subNotify" value="sound"><span>声音+消息</span></label>
+                            </div>
+                        </div>
+                        <button class="sub-add-btn" onclick="addSubscription()">+ 添加订阅</button>
+                    </div>
+                </div>
+
+                <div class="sub-list-card">
+                    <h3 class="sub-section-title">我的订阅 <span id="subCount" class="sub-count-badge">0</span></h3>
+                    <div class="ws-list" id="subscriptionsList">
+                        <div class="ws-empty">暂无订阅，在上方添加任务订阅</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 通知 Toast 容器 -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="js/data.js"></script>
+    <script src="js/combobox.js"></script>
+    <script src="js/calc.js"></script>
+    <script src="js/worldstate.js?v=4"></script>
+    <script src="js/relics.js"></script>
+    <script src="js/market.js"></script>
+    <script>
+        // 页面初始化
+        initComboboxes();
+        initWorldState();
+        initRelics();
+        initMarket();
+        initSidebar();
+    </script>
+</body>
+</html>

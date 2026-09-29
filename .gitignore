@@ -1,0 +1,64 @@
+# ===== .NET / C# =====
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.log
+.vs/
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.VC.opendb
+TestResults/
+*.nupkg
+*.snupkg
+publish/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+.Python
+venv/
+env/
+.venv/
+*.pyc
+
+# ===== Build artifacts =====
+*.exe
+*.dll
+*.pdb
+*.lib
+*.exp
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== OS =====
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+$RECYCLE.BIN/
+
+# ===== Project specific =====
+WarframeTool.exe
+WarframeTool.exe.WebView2/
+install.exe
+v2.0.exe
+data/Relics_raw.json
+data/Relics.json
+data/arbys.txt
+data/solNodes.json
+
+# ===== WebView2 runtime =====
+WebView2Loader.dll
+*.WebView2/
