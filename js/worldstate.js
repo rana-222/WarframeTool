@@ -1,11 +1,13 @@
 // ============================================================
-// Warframe 世界状态：虚空裂缝 + 仲裁任务
-// 数据来自后端代理接口 /api/fissures 与 /api/arbitrations
+// Warframe 世界状态：主页仪表盘（环境周期/虚空商人/突击/执政官猎杀）
+//                  + 虚空裂缝 + 仲裁队列
+// 数据来自后端代理接口（C# 后台轮询 warframestat.us 并缓存）
 // ============================================================
 
 const FISSURES_API = "/api/fissures";
 const ARBITRATIONS_API = "/api/arbitrations";
-const REFRESH_INTERVAL = 60000; // 60秒刷新
+const WORLDSTATE_API = "/api/worldstate";
+const REFRESH_INTERVAL = 30000; // 30秒刷新（后端缓存，零 HTTP 开销）
 
 // 裂缝等级颜色映射
 const TIER_COLORS = {
@@ -272,25 +274,12 @@ function renderFissures(data){
     container.innerHTML = html;
 }
 
-// ============ 仲裁推荐等级划分 ============
-// 参照社区仲裁分级工具：按任务类型难度划分
-// 传奇 = 无尽任务（防御/生存/拦截/挖掘），推荐高等级玩家
-// 优秀 = 中等难度任务，推荐中等级玩家
-// 普通 = 快速任务，推荐低等级玩家
-const ARBI_LEVEL = {
-    legendary: ["Defense", "Survival", "Interception", "Excavation"],
-    excellent: ["Mobile Defense", "Disruption", "Hijack", "Alchemy",
-                "Void Flood", "Void Cascade", "Void Armageddon",
-                "Mirror Defense", "Infested Salvage", "Defection",
-                "Dark Sector Defense", "Dark Sector Survival",
-                "Dark Sector Excavation", "Dark Sector Disruption",
-                "Dark Sector Defection"]
-};
+// ============ 仲裁评级 ============
+// 评级由后端根据 arbi.wf.wiki 排行榜各任务类型最高纪录给出：
+// 传奇(S) / 优秀(A系) / 普通(无数据或F)，同时附带该纪录的生息效率 effPct
 const LEVEL_LABEL = {common:"普通", excellent:"优秀", legendary:"传奇"};
-function arbiLevel(missionType){
-    if(ARBI_LEVEL.legendary.includes(missionType)) return "legendary";
-    if(ARBI_LEVEL.excellent.includes(missionType)) return "excellent";
-    return "common";
+function arbiLevel(a){
+    return a.level || "common";
 }
 
 // ============ 仲裁日历状态 ============
@@ -315,11 +304,18 @@ function dateKey(d){
     return `${y}-${m}-${day}`;
 }
 
-// 渲染日历
+// 渲染日历（折叠式：翻页条常驻，月视图按需展开）
+const WEEK_ZH = ["周日","周一","周二","周三","周四","周五","周六"];
 function renderCalendar(){
     const grid = document.getElementById("calGrid");
     const title = document.getElementById("calTitle");
     if(!grid || !title) return;
+
+    // 翻页条当前日期文本
+    const cur = document.getElementById("calCurrent");
+    if(cur && _selectedDate){
+        cur.textContent = `${_selectedDate.getFullYear()}年${_selectedDate.getMonth()+1}月${_selectedDate.getDate()}日 ${WEEK_ZH[_selectedDate.getDay()]}`;
+    }
 
     const year = _calView.getFullYear();
     const month = _calView.getMonth();
@@ -355,15 +351,35 @@ function renderCalendar(){
     }
     grid.innerHTML = html;
 
-    // 绑定点击
+    // 绑定点击：选中日期并自动收起日历
     grid.querySelectorAll(".cal-cell.has-data").forEach(cell=>{
         cell.addEventListener("click", ()=>{
             const parts = cell.dataset.date.split("-");
             _selectedDate = new Date(+parts[0], +parts[1]-1, +parts[2]);
+            _calView = new Date(+parts[0], +parts[1]-1, 1);
+            setCalendarExpanded(false);
             renderCalendar();
             renderArbitrations(_allArbitrations);
         });
     });
+}
+
+// 展开/收起日历
+function setCalendarExpanded(expanded){
+    const wrap = document.getElementById("calendarWrap");
+    if(wrap) wrap.classList.toggle("collapsed", !expanded);
+}
+
+// 前后翻一天（翻页条）
+function changeDay(delta){
+    if(!_selectedDate){
+        _selectedDate = new Date();
+        _selectedDate.setHours(0,0,0,0);
+    }
+    _selectedDate = new Date(_selectedDate.getFullYear(), _selectedDate.getMonth(), _selectedDate.getDate() + delta);
+    _calView = new Date(_selectedDate.getFullYear(), _selectedDate.getMonth(), 1);
+    renderCalendar();
+    renderArbitrations(_allArbitrations);
 }
 
 function changeMonth(delta){
@@ -390,11 +406,14 @@ function renderArbitrations(data){
 
     // 等级筛选
     if(_levelFilter !== "all"){
-        filtered = filtered.filter(a => arbiLevel(a.missionType) === _levelFilter);
+        filtered = filtered.filter(a => arbiLevel(a) === _levelFilter);
     }
 
     // 按时间排序
     filtered.sort((a,b) => a.start - b.start);
+
+    // 同步更新主页「当前仲裁」卡片
+    renderCurrentArbi();
 
     if(filtered.length === 0){
         container.innerHTML = `<div class="ws-empty">当日无${_levelFilter === "all" ? "" : LEVEL_LABEL[_levelFilter]+"级"}仲裁任务</div>`;
@@ -403,14 +422,18 @@ function renderArbitrations(data){
 
     const html = filtered.map(a => {
         const fColor = factionColor(a.faction);
-        const lv = arbiLevel(a.missionType);
+        const lv = arbiLevel(a);
         const current = a.isCurrent ? ' current' : '';
+        const eff = a.effPerHour != null
+            ? `<span class="ws-tag eff" title="该任务类型最高纪录的生息效率（arbi.wf.wiki）">⚡ ${a.effPerHour}/h</span>`
+            : '';
         return `
         <div class="ws-item arbi-item${current}">
             <div class="ws-item-head">
                 <span class="ws-arbi-time">${formatArbiTime(a.start)}</span>
                 ${a.isCurrent ? '<span class="ws-tag live">LIVE</span>' : ''}
                 <span class="lv-tag ${lv}">${LEVEL_LABEL[lv]}</span>
+                ${eff}
             </div>
             <div class="ws-node">${zhNode(a.node)}</div>
             <div class="ws-meta">
@@ -431,6 +454,130 @@ function setLevelFilter(level){
     renderArbitrations(_allArbitrations);
 }
 
+// ============ 主页仪表盘：世界状态卡片 ============
+// 环境周期定义（名称 + 状态中文映射）
+const CYCLE_DEF = {
+    earthCycle:   { name:"地球",       states:{day:"☀️ 白天", night:"🌑 夜晚"} },
+    cetusCycle:   { name:"夜灵平原",   states:{day:"☀️ 白天", night:"🌑 夜晚"} },
+    vallisCycle:  { name:"奥布山谷",   states:{warm:"🔥 温暖", cold:"❄️ 寒冷"} },
+    cambionCycle: { name:"魔胎之阈",   states:{fass:"🟠 法司", vome:"🔵 沃姆"} },
+    zarimanCycle: { name:"扎里曼号",   states:{corpus:"🔵 科普斯", grineer:"🔴 格里尔"} },
+    duviriCycle:  { name:"双衍王境",   states:{fear:"😨 恐惧", sorrow:"😢 悲伤", anger:"😡 愤怒", joy:"😊 欢乐", envy:"😒 嫉妒"} },
+};
+
+// 渲染环境周期条
+function renderEnvStrip(ws){
+    const strip = document.getElementById("envStrip");
+    if(!strip) return;
+    let html = "";
+    for(const [key, def] of Object.entries(CYCLE_DEF)){
+        const c = ws[key];
+        if(!c || !c.expiry) continue;
+        const stateZh = def.states[c.state] || c.state || "-";
+        html += `<div class="env-chip" title="${def.name}">
+            <span class="env-name">${def.name}</span>
+            <span class="env-state">${stateZh}</span>
+            <span class="ws-timer env-timer" data-expiry="${c.expiry}">${formatRemaining(c.expiry)}</span>
+        </div>`;
+    }
+    strip.innerHTML = html || `<div class="env-chip">暂无环境数据</div>`;
+}
+
+// 渲染虚空商人卡片
+function renderBaro(vt){
+    const el = document.getElementById("baroBody");
+    if(!el) return;
+    if(!vt){ el.innerHTML = `<div class="ws-empty">暂无数据</div>`; return; }
+    const now = Date.now();
+    const start = parseTimestamp(vt.activation);
+    const end = parseTimestamp(vt.expiry);
+    const loc = zhNode(vt.location);
+    if(now < start){
+        el.innerHTML = `
+        <div class="baro-status waiting">尚未到访</div>
+        <div class="baro-loc">下次到访：${loc}</div>
+        <div class="card-countdown">⏳ 距开始 <span class="ws-timer" data-expiry="${vt.activation}">${formatRemaining(vt.activation)}</span></div>`;
+    }else if(now < end){
+        el.innerHTML = `
+        <div class="baro-status active">● 正在到访</div>
+        <div class="baro-loc">${vt.character || "Baro Ki'Teer"} @ ${loc}</div>
+        <div class="card-countdown">⏳ 剩余 <span class="ws-timer" data-expiry="${vt.expiry}">${formatRemaining(vt.expiry)}</span></div>`;
+    }else{
+        el.innerHTML = `<div class="ws-empty">商人已离开，等待下次到访</div>`;
+    }
+}
+
+// 渲染每日突击卡片
+function renderSortie(s){
+    const el = document.getElementById("sortieBody");
+    if(!el) return;
+    if(!s || !s.variants || s.variants.length === 0){
+        el.innerHTML = `<div class="ws-empty">暂无数据</div>`; return;
+    }
+    const rows = s.variants.map((v,i)=>`
+        <div class="sortie-row">
+            <span class="sortie-idx">${i+1}</span>
+            <div class="sortie-info">
+                <div class="sortie-main"><span class="sortie-mission">${zhMission(v.missionType)}</span> @ ${zhNode(v.node)}</div>
+                <div class="sortie-modifier">${v.modifier || ''}</div>
+            </div>
+        </div>`).join("");
+    el.innerHTML = `
+        <div class="sortie-boss">${s.boss || ''}</div>
+        ${rows}
+        <div class="card-countdown">⏳ <span class="ws-timer" data-expiry="${s.expiry}">${formatRemaining(s.expiry)}</span></div>`;
+}
+
+// 执政官名称映射
+const ARCHON_ZH = {
+    "Archon Amar": "执政官 阿玛尔",
+    "Archon Nira": "执政官 尼拉",
+    "Archon Boreal": "执政官 博雷亚",
+};
+
+// 渲染执政官猎杀卡片
+function renderArchon(a){
+    const el = document.getElementById("archonBody");
+    if(!el) return;
+    if(!a || !a.missions || a.missions.length === 0){
+        // 执政官猎杀仅主源 warframestat.us 提供，备源暂无此数据，主源恢复后自动显示
+        el.innerHTML = `<div class="ws-empty">暂无数据（主数据源恢复后自动显示）</div>`; return;
+    }
+    const rows = a.missions.map(m=>`
+        <div class="sortie-row archon-row">
+            <span class="sortie-mission">${zhMission(m.type)}</span>
+            <span class="sortie-node">${zhNode(m.node)}</span>
+        </div>`).join("");
+    el.innerHTML = `
+        <div class="sortie-boss">${ARCHON_ZH[a.boss] || a.boss || ''}</div>
+        ${rows}
+        <div class="card-countdown">⏳ <span class="ws-timer" data-expiry="${a.expiry}">${formatRemaining(a.expiry)}</span></div>`;
+}
+
+// 渲染当前仲裁卡片（数据来自仲裁队列缓存）
+function renderCurrentArbi(){
+    const el = document.getElementById("currentArbiBody");
+    if(!el) return;
+    const cur = _allArbitrations.find(a=>a.isCurrent);
+    if(!cur){
+        el.innerHTML = `<div class="ws-empty">暂无进行中的仲裁</div>`;
+        return;
+    }
+    const lv = arbiLevel(cur);
+    const eff = cur.effPerHour != null ? `<span class="ws-tag eff">⚡ ${cur.effPerHour}/h</span>` : '';
+    el.innerHTML = `
+        <div class="ws-node arbi-cur-node">${zhNode(cur.node)}</div>
+        <div class="ws-meta">
+            <span class="lv-tag ${lv}">${LEVEL_LABEL[lv]}</span>
+            ${eff}
+        </div>
+        <div class="ws-meta">
+            <span style="color:${factionColor(cur.faction)}">${cur.faction || '-'}</span>
+            <span class="ws-mission">${zhMission(cur.missionType)}</span>
+        </div>
+        <div class="card-countdown">⏳ 剩余 <span class="ws-timer" data-expiry="${cur.end}">${formatRemaining(cur.end)}</span></div>`;
+}
+
 // ============ 数据获取 ============
 async function loadFissures(){
     try{
@@ -439,11 +586,26 @@ async function loadFissures(){
         if(json.ok){
             _currentFissures = json.data;  // 缓存供订阅检查
             renderFissures(json.data);
+            // 陈旧数据提示（后台刷新失败时仍显示旧数据）
+            const staleEl = document.getElementById("fissuresStaleNotice");
+            if(json.stale){
+                if(staleEl) staleEl.style.display = "block";
+                else {
+                    const notice = document.createElement("div");
+                    notice.id = "fissuresStaleNotice";
+                    notice.style.cssText = "background:#fff8e1;border:2px solid var(--orange);border-radius:10px;padding:8px 14px;margin-bottom:12px;font-weight:800;color:var(--ink);box-shadow:2px 2px 0 var(--ink)";
+                    notice.textContent = "⚠️ 裂缝数据刷新中，当前显示的是最近一次成功获取的数据";
+                    document.getElementById("fissuresList").parentNode.insertBefore(notice, document.getElementById("fissuresList"));
+                }
+            } else if(staleEl){
+                staleEl.style.display = "none";
+            }
         }else{
             document.getElementById("fissuresList").innerHTML = `<div class="ws-empty ws-error">裂缝数据加载失败：${json.error || '未知错误'}</div>`;
         }
     }catch(e){
-        document.getElementById("fissuresList").innerHTML = `<div class="ws-empty ws-error">裂缝数据加载失败：${e.message}</div>`;
+        // 网络错误时保留旧数据不覆盖，仅在控制台记录
+        console.warn("裂缝请求失败，保留旧数据:", e.message);
     }
 }
 
@@ -462,6 +624,22 @@ async function loadArbitrations(){
     }
 }
 
+async function loadWorldState(){
+    try{
+        const resp = await fetch(WORLDSTATE_API);
+        const json = await resp.json();
+        if(json.ok){
+            renderEnvStrip(json);
+            renderBaro(json.voidTrader);
+            renderSortie(json.sortie);
+            renderArchon(json.archonHunt);
+        }
+    }catch(e){
+        // 网络错误时保留旧数据不覆盖，仅在控制台记录
+        console.warn("世界状态请求失败，保留旧数据:", e.message);
+    }
+}
+
 // 每秒更新倒计时
 function updateTimers(){
     document.querySelectorAll(".ws-timer[data-expiry]").forEach(el=>{
@@ -472,7 +650,7 @@ function updateTimers(){
     });
 }
 
-// 切换主导航标签页
+// 切换主导航标签页（wiki 标签通知宿主 WinForms 显示第二 WebView）
 function switchMainTab(tab){
     document.querySelectorAll(".main-tab").forEach(btn=>{
         btn.classList.toggle("active", btn.dataset.tab === tab);
@@ -480,6 +658,10 @@ function switchMainTab(tab){
     document.querySelectorAll(".tab-pane").forEach(pane=>{
         pane.classList.toggle("active", pane.id === `tab-${tab}`);
     });
+    // WebView2 宿主通信：显示/隐藏内嵌灰机Wiki
+    if(window.chrome && window.chrome.webview){
+        window.chrome.webview.postMessage(tab === "wiki" ? "show-wiki" : "hide-wiki");
+    }
 }
 
 function initWorldState(){
@@ -491,11 +673,20 @@ function initWorldState(){
     document.querySelectorAll(".ws-tab").forEach(btn=>{
         btn.addEventListener("click", ()=> setFissureTab(btn.dataset.fissureType));
     });
-    // 绑定日历翻页
+    // 绑定日历翻页（翻页条：前后一天；展开区：前后月份；图标：展开/收起）
     const prevBtn = document.getElementById("calPrev");
     const nextBtn = document.getElementById("calNext");
-    if(prevBtn) prevBtn.addEventListener("click", ()=> changeMonth(-1));
-    if(nextBtn) nextBtn.addEventListener("click", ()=> changeMonth(1));
+    if(prevBtn) prevBtn.addEventListener("click", ()=> changeDay(-1));
+    if(nextBtn) nextBtn.addEventListener("click", ()=> changeDay(1));
+    const mPrev = document.getElementById("calMonthPrev");
+    const mNext = document.getElementById("calMonthNext");
+    if(mPrev) mPrev.addEventListener("click", ()=> changeMonth(-1));
+    if(mNext) mNext.addEventListener("click", ()=> changeMonth(1));
+    const toggle = document.getElementById("calToggle");
+    if(toggle) toggle.addEventListener("click", ()=>{
+        const wrap = document.getElementById("calendarWrap");
+        setCalendarExpanded(wrap ? wrap.classList.contains("collapsed") : false);
+    });
     // 绑定等级筛选
     document.querySelectorAll(".lv-btn").forEach(btn=>{
         btn.addEventListener("click", ()=> setLevelFilter(btn.dataset.level));
@@ -503,8 +694,10 @@ function initWorldState(){
 
     loadFissures();
     loadArbitrations();
+    loadWorldState();
     setInterval(loadFissures, REFRESH_INTERVAL);
     setInterval(loadArbitrations, REFRESH_INTERVAL);
+    setInterval(loadWorldState, REFRESH_INTERVAL);
     setInterval(updateTimers, 1000);
 
     // 初始化订阅功能

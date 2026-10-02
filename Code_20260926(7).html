@@ -19,17 +19,13 @@
         <button class="sidebar-toggle" id="sidebarToggle" title="展开/收起">
             <span class="toggle-icon">«</span>
         </button>
-        <button class="main-tab active" data-tab="fissures">
-            <span class="tab-icon">⚡</span>
-            <span class="tab-label">虚空裂缝</span>
+        <button class="main-tab active" data-tab="home">
+            <span class="tab-icon">🏠</span>
+            <span class="tab-label">主页</span>
         </button>
         <button class="main-tab" data-tab="calc">
             <span class="tab-icon">📊</span>
             <span class="tab-label">裂罅计算</span>
-        </button>
-        <button class="main-tab" data-tab="arbitrations">
-            <span class="tab-icon">🎯</span>
-            <span class="tab-label">仲裁队列</span>
         </button>
         <button class="main-tab" data-tab="relics">
             <span class="tab-icon">💎</span>
@@ -43,18 +39,101 @@
             <span class="tab-icon">🔔</span>
             <span class="tab-label">订阅提醒</span>
         </button>
+        <button class="main-tab" data-tab="wiki">
+            <span class="tab-icon">📖</span>
+            <span class="tab-label">Wiki 查找</span>
+        </button>
+        <button class="main-tab" data-tab="settings">
+            <span class="tab-icon">⚙️</span>
+            <span class="tab-label">设置</span>
+        </button>
     </nav>
 
     <div class="tab-content-wrap">
-        <!-- 标签页1：虚空裂缝 -->
-        <section class="tab-pane active" id="tab-fissures">
-            <div class="fissures-container">
-                <div class="ws-tabs">
-                    <button class="ws-tab active" data-fissure-type="normal">普通</button>
-                    <button class="ws-tab" data-fissure-type="steel">钢铁</button>
+        <!-- 标签页1：主页（世界状态仪表盘） -->
+        <section class="tab-pane active" id="tab-home">
+            <div class="home-container">
+                <!-- 世界环境周期 -->
+                <div class="env-strip" id="envStrip">
+                    <div class="env-chip">环境周期加载中…</div>
                 </div>
-                <div class="ws-list" id="fissuresList">
-                    <div class="ws-empty">加载中…</div>
+
+                <!-- 快捷信息卡片 -->
+                <div class="quick-grid">
+                    <div class="home-card" id="currentArbiCard">
+                        <h4 class="home-card-title">🎯 当前仲裁</h4>
+                        <div class="home-card-body" id="currentArbiBody">
+                            <div class="ws-empty">加载中…</div>
+                        </div>
+                    </div>
+                    <div class="home-card">
+                        <h4 class="home-card-title">🛒 虚空商人</h4>
+                        <div class="home-card-body" id="baroBody">
+                            <div class="ws-empty">加载中…</div>
+                        </div>
+                    </div>
+                    <div class="home-card">
+                        <h4 class="home-card-title">⚔️ 每日突击</h4>
+                        <div class="home-card-body" id="sortieBody">
+                            <div class="ws-empty">加载中…</div>
+                        </div>
+                    </div>
+                    <div class="home-card">
+                        <h4 class="home-card-title">👑 执政官猎杀</h4>
+                        <div class="home-card-body" id="archonBody">
+                            <div class="ws-empty">加载中…</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 主体：虚空裂缝 + 仲裁队列 -->
+                <div class="home-main">
+                    <div class="home-panel">
+                        <div class="home-section-head">
+                            <h3 class="home-section-title">⚡ 虚空裂缝</h3>
+                            <div class="ws-tabs">
+                                <button class="ws-tab active" data-fissure-type="normal">普通</button>
+                                <button class="ws-tab" data-fissure-type="steel">钢铁</button>
+                            </div>
+                        </div>
+                        <div class="ws-list home-fissures-list" id="fissuresList">
+                            <div class="ws-empty">加载中…</div>
+                        </div>
+                    </div>
+                    <div class="home-panel">
+                        <div class="home-section-head">
+                            <h3 class="home-section-title">🎯 仲裁队列</h3>
+                            <div class="level-filter home-level-filter">
+                                <button class="lv-btn active" data-level="all">全部</button>
+                                <button class="lv-btn" data-level="common">普通</button>
+                                <button class="lv-btn" data-level="excellent">优秀</button>
+                                <button class="lv-btn" data-level="legendary">传奇</button>
+                            </div>
+                        </div>
+                        <!-- 日历：折叠式翻页条 + 展开选择 -->
+                        <div class="calendar-wrap home-calendar collapsed" id="calendarWrap">
+                            <div class="cal-bar">
+                                <button class="cal-nav" id="calPrev" title="前一天">«</button>
+                                <span class="cal-current" id="calCurrent">--</span>
+                                <button class="cal-nav" id="calNext" title="后一天">»</button>
+                                <button class="cal-nav cal-picker" id="calToggle" title="展开/收起日历">📅</button>
+                            </div>
+                            <div class="cal-expand">
+                                <div class="cal-header">
+                                    <button class="cal-nav" id="calMonthPrev">‹</button>
+                                    <span class="cal-title" id="calTitle"></span>
+                                    <button class="cal-nav" id="calMonthNext">›</button>
+                                </div>
+                                <div class="cal-weekdays">
+                                    <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                                </div>
+                                <div class="cal-grid" id="calGrid"></div>
+                            </div>
+                        </div>
+                        <div class="ws-list home-arbi-list" id="arbitrationsList">
+                            <div class="ws-empty">加载中…</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -166,36 +245,7 @@
             </main>
         </section>
 
-        <!-- 标签页3：仲裁任务队列 -->
-        <section class="tab-pane" id="tab-arbitrations">
-            <div class="arbitrations-container">
-                <!-- 日历 -->
-                <div class="calendar-wrap">
-                    <div class="cal-header">
-                        <button class="cal-nav" id="calPrev">‹</button>
-                        <span class="cal-title" id="calTitle"></span>
-                        <button class="cal-nav" id="calNext">›</button>
-                    </div>
-                    <div class="cal-weekdays">
-                        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
-                    </div>
-                    <div class="cal-grid" id="calGrid"></div>
-                </div>
-                <!-- 等级筛选 -->
-                <div class="level-filter">
-                    <button class="lv-btn active" data-level="all">全部</button>
-                    <button class="lv-btn" data-level="common">普通</button>
-                    <button class="lv-btn" data-level="excellent">优秀</button>
-                    <button class="lv-btn" data-level="legendary">传奇</button>
-                </div>
-                <!-- 当日仲裁列表 -->
-                <div class="ws-list" id="arbitrationsList">
-                    <div class="ws-empty">加载中…</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- 标签页4：遗物价格计算 -->
+        <!-- 标签页3：遗物价格计算 -->
         <section class="tab-pane" id="tab-relics">
             <div class="relics-container">
                 <div class="relic-search-row">
@@ -279,6 +329,56 @@
                 </div>
             </div>
         </section>
+
+        <!-- 标签页7：设置 -->
+        <section class="tab-pane" id="tab-settings">
+            <div class="relics-container">
+                <!-- 更新公告 -->
+                <div class="relic-summary" style="margin-bottom:16px">
+                    <h3>📢 更新公告</h3>
+                    <div id="updateAnnouncement" style="font-weight:700;line-height:1.8;margin-top:8px">
+                        加载中...
+                    </div>
+                </div>
+
+                <!-- 关闭行为 -->
+                <div class="relic-summary" style="margin-bottom:16px">
+                    <h3>窗口关闭行为</h3>
+                    <div class="sub-type-group" style="margin-top:12px">
+                        <label class="sub-type-opt"><input type="radio" name="closeBehavior" value="exit" onchange="saveCloseBehavior()"><span>关闭窗口即退出程序</span></label>
+                        <label class="sub-type-opt"><input type="radio" name="closeBehavior" value="tray" onchange="saveCloseBehavior()"><span>最小化到系统托盘（后台运行）</span></label>
+                    </div>
+                </div>
+
+                <!-- 自定义提示音 -->
+                <div class="relic-summary">
+                    <h3>🔊 提示音设置</h3>
+                    <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                        <label class="sub-add-btn" style="margin:0;cursor:pointer">
+                            上传自定义提示音
+                            <input type="file" id="soundUpload" accept="audio/*" style="display:none" onchange="handleSoundUpload(event)">
+                        </label>
+                        <button class="sub-add-btn" style="margin:0;background:var(--blue)" onclick="playCustomSound()">试听</button>
+                        <button class="sub-add-btn" style="margin:0;background:var(--red)" onclick="resetSound()">恢复默认</button>
+                        <span id="soundStatus" style="font-weight:700;color:var(--muted)">当前：默认提示音</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 标签页8：Wiki 查找（应用内通过第二 WebView 打开灰机Wiki） -->
+        <section class="tab-pane" id="tab-wiki">
+            <div class="relics-container">
+                <div class="relic-summary" style="margin-bottom:16px">
+                    <h3>📖 灰机 Wiki 查找</h3>
+                </div>
+                <div class="wiki-hint" id="wikiHint">
+                    <p style="font-size:15px;font-weight:800">点击侧边栏「Wiki 查找」即可在应用内浏览 <u>warframe.huijiwiki.com</u>（灰机 Wiki）。</p>
+                    <p style="color:var(--muted)">支持站内搜索与页面跳转，顶部工具栏可随时返回本工具。</p>
+                    <p style="color:var(--muted);font-size:12.5px">注：当前页面在浏览器中预览时不可用，请在桌面应用中使用。</p>
+                </div>
+            </div>
+        </section>
     </div>
 
     <!-- 通知 Toast 容器 -->
@@ -290,12 +390,14 @@
     <script src="js/worldstate.js?v=4"></script>
     <script src="js/relics.js"></script>
     <script src="js/market.js"></script>
+    <script src="js/settings.js"></script>
     <script>
         // 页面初始化
         initComboboxes();
         initWorldState();
         initRelics();
         initMarket();
+        initSettings();
         initSidebar();
     </script>
 </body>

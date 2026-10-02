@@ -41,10 +41,9 @@
     <EmbeddedResource Include="..\js\worldstate.js" Link="Resources\js\worldstate.js" />
     <EmbeddedResource Include="..\js\relics.js" Link="Resources\js\relics.js" />
     <EmbeddedResource Include="..\js\market.js" Link="Resources\js\market.js" />
+    <EmbeddedResource Include="..\js\settings.js" Link="Resources\js\settings.js" />
     <EmbeddedResource Include="..\data\relics_compact.json" Link="Resources\data\relics_compact.json" />
     <EmbeddedResource Include="..\data\wfm_items.json" Link="Resources\data\wfm_items.json" />
-    <EmbeddedResource Include="..\data\arbys.txt" Link="Resources\data\arbys.txt" />
-    <EmbeddedResource Include="..\data\solNodes.json" Link="Resources\data\solNodes.json" />
     <EmbeddedResource Include="..\data\arbys.schedule.v2.json" Link="Resources\data\arbys.schedule.v2.json" />
     <EmbeddedResource Include="..\data\arbys.nodes.json" Link="Resources\data\arbys.nodes.json" />
   </ItemGroup>

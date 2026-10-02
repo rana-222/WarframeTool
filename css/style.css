@@ -128,7 +128,7 @@ body {
 .tab-content-wrap{
     position:relative;
     z-index:1;
-    max-width:900px;
+    max-width:1360px;
     margin:0 auto;
     padding-left:180px;
     transition:padding-left .25s ease;
@@ -161,7 +161,246 @@ body.sidebar-collapsed .tab-content-wrap{
 }
 
 /* 裂缝 / 仲裁容器 */
-.fissures-container, .arbitrations-container, .relics-container{
+/* ===== 主页仪表盘 ===== */
+.home-container{
+    background:#fff;
+    border:2.5px solid var(--ink);
+    border-radius:20px;
+    padding:16px;
+    box-shadow:5px 5px 0 var(--ink);
+    height:calc(100vh - 80px);  /* 固定高度：裂缝/仲裁列表面板内部滚动，页面不再变长 */
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    overflow-y:auto;   /* 极矮视口兜底：内部保底高度超出时容器自身滚动，不裁剪 */
+    overflow-x:hidden;
+}
+
+/* 环境周期条 */
+.env-strip{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    flex:0 0 auto;
+}
+.env-chip{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    border:2px solid var(--ink);
+    border-radius:10px;
+    padding:6px 12px;
+    box-shadow:2px 2px 0 var(--ink);
+    background:#fff;
+    flex:1;
+    min-width:158px;
+    justify-content:space-between;
+}
+.env-chip:hover{
+    transform:translate(-1px,-1px);
+    box-shadow:3px 3px 0 var(--ink);
+}
+.env-name{
+    font-size:12px;
+    font-weight:900;
+    color:var(--muted);
+    white-space:nowrap;
+}
+.env-state{
+    font-size:13px;
+    font-weight:900;
+    white-space:nowrap;
+}
+.env-timer{
+    font-size:11.5px;
+    font-weight:800;
+    color:var(--muted);
+}
+
+/* 快捷信息卡片：可收缩（内容过多时卡片内部滚动），把空间让给下方双面板 */
+.quick-grid{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    grid-template-rows:1fr;   /* 弹性行：容器高度不足时轨道随之收缩 */
+    gap:14px;
+    flex:0 1 auto;            /* 不增长、可收缩 */
+    min-height:120px;
+    overflow:hidden;
+}
+.home-card{
+    border:2px solid var(--ink);
+    border-radius:12px;
+    background:#fff;
+    box-shadow:3px 3px 0 var(--ink);
+    padding:12px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-height:0;
+    overflow:hidden;
+}
+.home-card-title{
+    margin:0;
+    font-size:14px;
+    font-weight:900;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:6px;
+}
+.home-card-body{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    font-size:13px;
+    flex:1;
+    min-height:0;
+    overflow-y:auto;   /* 卡片被压矮时内部滚动 */
+}
+
+/* 主体双面板：裂缝 + 仲裁队列（保底 260px，空间不足时压缩上方卡片区） */
+.home-main{
+    display:grid;
+    grid-template-columns:1.15fr 0.85fr;
+    grid-template-rows:1fr;   /* 弹性行：面板高度跟随容器 */
+    gap:14px;
+    flex:1 1 260px;
+    min-height:260px;
+}
+.home-panel{
+    border:2px solid var(--ink);
+    border-radius:12px;
+    background:#fff;
+    box-shadow:3px 3px 0 var(--ink);
+    padding:12px 14px;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    overflow:hidden;
+}
+.home-section-head{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;  /* 左对齐：按钮组紧跟标题，避免贴右溢出被裁剪 */
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+    flex:0 0 auto;
+}
+.home-section-title{
+    margin:0;
+    font-size:15px;
+    font-weight:900;
+    flex-shrink:0;
+}
+.home-section-head .ws-tabs{
+    gap:6px;
+    margin-bottom:0;
+    flex-wrap:nowrap;
+    flex:0 0 auto;
+}
+.home-section-head .ws-tab{
+    flex:0 0 66px;   /* 显式宽度：规避 WebView2 首帧 auto 宽度计算异常导致的溢出 */
+    padding:4px 0;
+    font-size:12.5px;
+}
+.home-level-filter{
+    margin-bottom:0;
+    flex-wrap:wrap;       /* 允许换行：窄面板时一行或两行呈现，不竖排 */
+    flex:0 0 auto;        /* 不收缩：放不下时在头部整体换行，独占一行 */
+    min-width:0;
+}
+.home-level-filter .lv-btn{
+    flex:0 0 60px;   /* 显式宽度：规避 WebView2/Chromium 首帧 flex-basis:auto 宽度计算异常（同 .ws-tab 问题） */
+    min-width:auto;
+    padding:4px 8px;
+    font-size:11.5px;
+}
+
+/* 卡片内部元素 */
+.baro-status{
+    font-weight:900;
+    font-size:13px;
+}
+.baro-status.active{
+    color:var(--green-dark);
+}
+.baro-status.waiting{
+    color:var(--orange);
+}
+.baro-loc{
+    font-weight:800;
+    font-size:13px;
+    line-height:1.5;
+}
+.card-countdown{
+    margin-top:auto;
+    font-size:12px;
+    font-weight:800;
+    color:var(--muted);
+}
+.sortie-boss{
+    font-weight:900;
+    font-size:14px;
+    margin-bottom:2px;
+}
+.sortie-row{
+    display:flex;
+    gap:8px;
+    align-items:flex-start;
+    font-size:12.5px;
+    line-height:1.45;
+}
+.sortie-idx{
+    border:1.5px solid var(--ink);
+    border-radius:6px;
+    width:18px;
+    height:18px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    font-weight:900;
+    flex-shrink:0;
+    margin-top:1px;
+}
+.sortie-info{
+    flex:1;
+    min-width:0;
+}
+.sortie-main{
+    font-weight:800;
+}
+.sortie-mission{
+    color:var(--blue);
+    font-weight:900;
+}
+.sortie-modifier{
+    color:var(--muted);
+    font-size:11.5px;
+}
+.archon-row{
+    justify-content:space-between;
+}
+.sortie-node{
+    color:var(--muted);
+    font-size:12px;
+}
+.arbi-cur-node{
+    font-size:16px;
+    font-weight:900;
+}
+
+/* 主页响应式：极窄视口时卡片 2 列、主体单列（桌面窗口最小 900px 仍保持双面板） */
+@media (max-width: 768px){
+    .quick-grid{
+        grid-template-columns:repeat(2, 1fr);
+    }
+    .home-main{
+        grid-template-columns:1fr;
+    }
+}
+/* 极矮视口：日历已默认折叠为翻页条，无需额外处理 */
+
+.relics-container{
     background:#fff;
     border:2.5px solid var(--ink);
     border-radius:20px;
@@ -223,6 +462,39 @@ body.sidebar-collapsed .tab-content-wrap{
     margin-bottom:8px;
     background:#fafafa;
     flex:0 0 auto;
+}
+/* 折叠式日历：常驻翻页条 + 按需展开的月视图 */
+.cal-bar{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    justify-content:space-between;
+}
+.cal-bar .cal-nav{
+    width:26px;
+    height:24px;
+    font-size:13px;
+    flex:0 0 auto;
+}
+.cal-current{
+    flex:1;
+    text-align:center;
+    font-weight:900;
+    font-size:12.5px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.cal-picker{
+    background:var(--green-light);
+}
+.calendar-wrap.collapsed .cal-expand{
+    display:none;
+}
+.cal-expand{
+    margin-top:6px;
+    border-top:1.5px dashed #d8d8d0;
+    padding-top:5px;
 }
 .cal-header{
     display:flex;
@@ -417,6 +689,7 @@ body.sidebar-collapsed .tab-content-wrap{
 .ws-tag.storm{background:var(--blue);color:#fff}
 .ws-tag.hard{background:var(--red);color:#fff}
 .ws-tag.live{background:var(--red);color:#fff;animation:pulse 1s infinite}
+.ws-tag.eff{background:var(--green-light);color:var(--green-dark)}
 
 /* 仲裁专用 */
 .arbi-item.current{
@@ -788,58 +1061,63 @@ button:active{
 @keyframes floatC{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-10px) scale(1.2)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* ===== 订阅提醒 ===== */
+/* ===== 订阅提醒（统一 Neo-Brutalist 风格） ===== */
 .subscriptions-container{
     display:grid;
     grid-template-columns: 380px 1fr;
     gap:16px;
-    padding:16px;
-    max-width:100%;
     box-sizing:border-box;
-    height: calc(100vh - 160px);
-    overflow:hidden;
+    min-height:calc(100vh - 80px);
 }
 .sub-add-card, .sub-list-card{
-    background:rgba(255,255,255,.92);
+    background:#fff;
+    border:2.5px solid var(--ink);
     border-radius:14px;
-    box-shadow:0 4px 18px rgba(0,0,0,.08);
+    box-shadow:5px 5px 0 var(--ink);
     padding:18px 20px;
     overflow-y:auto;
 }
 .sub-section-title{
     margin:0 0 14px;
     font-size:16px;
-    font-weight:800;
-    color:#2a2a2a;
+    font-weight:900;
+    color:var(--ink);
     display:flex;
     align-items:center;
     gap:8px;
 }
 .sub-count-badge{
-    background:linear-gradient(135deg,#FF8C42,#E5484D);
+    background:var(--ink);
     color:#fff;
     font-size:12px;
-    font-weight:700;
+    font-weight:800;
     padding:1px 8px;
     border-radius:10px;
+    border:1.5px solid var(--ink);
 }
 .sub-form{ display:flex; flex-direction:column; gap:12px; }
 .sub-row{ display:flex; flex-direction:column; gap:6px; }
 .sub-row > label{
     font-size:13px;
-    font-weight:700;
-    color:#555;
+    font-weight:800;
+    color:var(--ink);
 }
 .sub-row select{
     padding:8px 10px;
-    border:1.5px solid #e0e0e0;
+    border:2px solid var(--ink);
     border-radius:8px;
     font-size:14px;
+    font-weight:700;
     background:#fff;
     outline:none;
-    transition:border-color .15s;
+    box-shadow:2px 2px 0 var(--ink);
+    transition:all .12s;
+    font-family:inherit;
 }
-.sub-row select:focus{ border-color:#FF8C42; }
+.sub-row select:focus{
+    box-shadow:2px 2px 0 var(--green);
+    border-color:var(--green);
+}
 .sub-type-group, .sub-advance-group, .sub-notify-group{
     display:flex;
     gap:8px;
@@ -850,35 +1128,44 @@ button:active{
     align-items:center;
     gap:5px;
     padding:6px 12px;
-    border:1.5px solid #e0e0e0;
-    border-radius:20px;
+    border:2px solid var(--ink);
+    border-radius:10px;
     cursor:pointer;
     font-size:13px;
-    transition:all .15s;
+    font-weight:700;
+    transition:all .12s;
     margin:0;
+    box-shadow:2px 2px 0 var(--ink);
 }
 .sub-type-opt input{ display:none; }
 .sub-type-opt span{ user-select:none; }
 .sub-type-opt:has(input:checked){
-    border-color:#FF8C42;
-    background:#FFF3E8;
-    color:#E5484D;
-    font-weight:700;
+    background:var(--ink);
+    color:#fff;
+    box-shadow:2px 2px 0 var(--green);
 }
 .sub-add-btn{
     margin-top:6px;
     padding:10px;
-    border:none;
+    border:2.5px solid var(--ink);
     border-radius:10px;
-    background:linear-gradient(135deg,#FF8C42,#E5484D);
-    color:#fff;
+    background:var(--green);
+    color:var(--ink);
     font-size:15px;
-    font-weight:800;
+    font-weight:900;
     cursor:pointer;
-    transition:transform .12s, box-shadow .12s;
+    box-shadow:3px 3px 0 var(--ink);
+    transition:all .12s;
+    font-family:inherit;
 }
-.sub-add-btn:hover{ transform:translateY(-1px); box-shadow:0 4px 12px rgba(229,72,77,.3); }
-.sub-add-btn:active{ transform:translateY(0); }
+.sub-add-btn:hover{
+    transform:translate(-1px,-1px);
+    box-shadow:4px 4px 0 var(--ink);
+}
+.sub-add-btn:active{
+    transform:translate(1px,1px);
+    box-shadow:1px 1px 0 var(--ink);
+}
 
 /* 订阅列表项 */
 .sub-item{
@@ -887,13 +1174,17 @@ button:active{
     justify-content:space-between;
     gap:12px;
     padding:12px 14px;
-    background:#f8f9fb;
-    border:1.5px solid #eee;
+    background:#fff;
+    border:2px solid var(--ink);
     border-radius:10px;
     margin-bottom:10px;
-    transition:border-color .15s;
+    box-shadow:2px 2px 0 var(--ink);
+    transition:all .12s;
 }
-.sub-item:hover{ border-color:#FF8C42; }
+.sub-item:hover{
+    transform:translate(-1px,-1px);
+    box-shadow:3px 3px 0 var(--ink);
+}
 .sub-item-main{
     display:flex;
     flex-direction:column;
@@ -903,13 +1194,13 @@ button:active{
 }
 .sub-item-type{
     font-size:12px;
-    font-weight:700;
-    color:#888;
+    font-weight:800;
+    color:var(--muted);
 }
 .sub-item-target{
     font-size:15px;
-    font-weight:800;
-    color:#2a2a2a;
+    font-weight:900;
+    color:var(--ink);
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
@@ -921,27 +1212,34 @@ button:active{
 .sub-meta-tag{
     font-size:11px;
     padding:2px 8px;
-    border-radius:10px;
-    background:#eef2f7;
-    color:#5a6478;
-    font-weight:600;
+    border-radius:8px;
+    background:var(--green-light);
+    color:var(--ink);
+    font-weight:800;
+    border:1.5px solid var(--ink);
 }
 .sub-del-btn{
-    width:28px;
-    height:28px;
-    border:none;
-    border-radius:50%;
-    background:#ffe5e5;
-    color:#E5484D;
+    width:30px;
+    height:30px;
+    border:2px solid var(--ink);
+    border-radius:8px;
+    background:var(--red);
+    color:#fff;
     font-size:14px;
+    font-weight:900;
     cursor:pointer;
     display:flex;
     align-items:center;
     justify-content:center;
-    transition:all .15s;
+    box-shadow:2px 2px 0 var(--ink);
+    transition:all .12s;
     flex-shrink:0;
+    font-family:inherit;
 }
-.sub-del-btn:hover{ background:#E5484D; color:#fff; }
+.sub-del-btn:hover{
+    transform:translate(-1px,-1px);
+    box-shadow:3px 3px 0 var(--ink);
+}
 
 /* Toast 通知 */
 .toast-container{

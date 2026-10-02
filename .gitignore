@@ -62,3 +62,10 @@ data/solNodes.json
 # ===== WebView2 runtime =====
 WebView2Loader.dll
 *.WebView2/
+
+# ===== 开发临时产物 =====
+test.py
+warframe_worldstate.json
+data/arbys.leaderboard.raw.json
+leaderboard_page.html
+probe_*.py
