@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>install</AssemblyName>
     <RootNamespace>WarframeInstaller</RootNamespace>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <AssemblyTitle>Warframe 玩家工具 - 安装程序</AssemblyTitle>
   </PropertyGroup>
 

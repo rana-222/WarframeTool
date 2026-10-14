@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -211,7 +212,7 @@ internal static class Program
         else if (path == "/api/arbitrations")
             data = Encoding.UTF8.GetBytes(GetArbitrations());
         else if (path.StartsWith("/api/wfm-prices"))
-            data = Encoding.UTF8.GetBytes(GetWfmPrices(ctx.Request.Url?.Query ?? ""));
+            data = Encoding.UTF8.GetBytes(GetWfmPrices(ctx.Request.Url?.Query ?? "").GetAwaiter().GetResult());
         else if (path.StartsWith("/api/settings"))
             data = Encoding.UTF8.GetBytes(HandleSettings(ctx.Request.Url?.Query ?? ""));
         else
@@ -233,7 +234,7 @@ internal static class Program
     // 低频访问 warframestat.us（10 分钟一次）避免触发 403/429 限流
     private static readonly HttpClient _wsHttp = new()
     {
-        Timeout = TimeSpan.FromSeconds(30),
+        Timeout = TimeSpan.FromSeconds(10),
         DefaultRequestHeaders = { { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) WarframeTool/1.0" } }
     };
 
@@ -245,6 +246,7 @@ internal static class Program
     private static bool _fissuresStale;             // 裂缝刷新失败标记
     private static System.Threading.Timer? _fissureTimer;
     private static System.Threading.Timer? _wsTimer;
+    private static System.Threading.Timer? _arbiTimer;
 
     // 启动分层后台轮询（立即在后台线程拉取，不阻塞主线程/窗口启动）
     public static void StartWorldStatePolling()
@@ -253,6 +255,9 @@ internal static class Program
             TimeSpan.Zero, TimeSpan.FromSeconds(60));
         _wsTimer = new System.Threading.Timer(_ => RefreshWorldState(), null,
             TimeSpan.Zero, TimeSpan.FromMinutes(10));
+        // 仲裁效率评级独立刷新，不阻塞世界状态数据
+        _arbiTimer = new System.Threading.Timer(_ => LoadArbiLeaderboard(), null,
+            TimeSpan.FromSeconds(2), TimeSpan.FromMinutes(10));
     }
 
     // 从根对象提取原始 JSON 文本（缺失时返回 null）
@@ -264,7 +269,7 @@ internal static class Program
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             return _wsHttp.GetStringAsync(url, cts.Token).Result;
         }
         catch { return null; }
@@ -453,8 +458,6 @@ internal static class Program
     // 低频访问主源（10 分钟一次）避免触发 Cloudflare 403/429 限流
     private static void RefreshWorldState()
     {
-        LoadArbiLeaderboard(); // 同步刷新仲裁生息效率评级（独立数据源，失败不影响下方流程）
-
         try
         {
             // ---- 主源：warframestat.us（一次请求覆盖全部数据，直接透传）----
@@ -713,8 +716,32 @@ internal static class Program
     // Warframe Market 价格代理（带内存缓存）
     private static readonly Dictionary<string, (long ts, JsonElement data)> _wfmCache = new();
     private static readonly object _wfmLock = new();
+    // wfm 全局限流：3 并发 + 滑动窗口 3 req/sec（避免触发 429）
+    private static readonly SemaphoreSlim _wfmSem = new(3, 3);
+    private static readonly Queue<long> _wfmReqTimes = new();
+    private static readonly object _wfmRateLock = new();
 
-    private static string GetWfmPrices(string query)
+    // 限流发送单个 wfm 请求（并发≤3，且任意 1 秒内≤3 次）
+    private static async Task<string> WfmGetStringAsync(HttpClient http, string url)
+    {
+        while (true)
+        {
+            long now;
+            lock (_wfmRateLock)
+            {
+                now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                while (_wfmReqTimes.Count > 0 && now - _wfmReqTimes.Peek() > 1000)
+                    _wfmReqTimes.Dequeue();
+                if (_wfmReqTimes.Count < 3) { _wfmReqTimes.Enqueue(now); break; }
+            }
+            await Task.Delay(120);
+        }
+        await _wfmSem.WaitAsync();
+        try { return await http.GetStringAsync(url); }
+        finally { _wfmSem.Release(); }
+    }
+
+    private static async Task<string> GetWfmPrices(string query)
     {
         // 解析 ?items=slug1,slug2,...
         var itemsParam = "";
@@ -732,12 +759,12 @@ internal static class Program
             return JsonSerializer.Serialize(new { ok = false, error = "缺少 items 参数" });
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var result = new Dictionary<string, object>();
+        var result = new ConcurrentDictionary<string, object>();
 
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        // 分离命中缓存与未命中的 slug
+        var uncached = new List<string>();
         foreach (var slug in slugs)
         {
-            // 检查缓存（10 分钟）
             lock (_wfmLock)
             {
                 if (_wfmCache.TryGetValue(slug, out var cached) && now - cached.ts < 600)
@@ -746,8 +773,15 @@ internal static class Program
                     continue;
                 }
             }
+            uncached.Add(slug);
+        }
 
-            // 构建价格数据对象
+        // 未命中的 slug 并行抓取（每个 slug 发 2 个请求，由 WfmGetStringAsync 全局限流）
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) WarframeTool/1.0");
+
+        await Task.WhenAll(uncached.Select(async slug =>
+        {
             double? median = null;
             int? minSell = null;
             int? maxBuy = null;
@@ -760,13 +794,12 @@ internal static class Program
             try
             {
                 var url = $"https://api.warframe.market/v2/orders/item/{slug}/top";
-                var json = http.GetStringAsync(url).Result;
+                var json = await WfmGetStringAsync(http, url);
                 using var doc = JsonDocument.Parse(json);
                 var dataEl = doc.RootElement.GetProperty("data");
                 var sells = dataEl.GetProperty("sell");
                 var buys = dataEl.GetProperty("buy");
 
-                // 提取并排序
                 var sellList = new List<(int platinum, int quantity, string user)>();
                 var buyList = new List<(int platinum, int quantity, string user)>();
                 foreach (var o in sells.EnumerateArray())
@@ -788,22 +821,18 @@ internal static class Program
                     if (maxBuy == null || p > maxBuy) maxBuy = p;
                 }
 
-                // 售价升序，收购价降序，取前 3
                 foreach (var o in sellList.OrderBy(x => x.platinum).Take(3))
                     topSells.Add(new { platinum = o.platinum, quantity = o.quantity, user = o.user });
                 foreach (var o in buyList.OrderByDescending(x => x.platinum).Take(3))
                     topBuys.Add(new { platinum = o.platinum, quantity = o.quantity, user = o.user });
             }
-            catch (Exception ex)
-            {
-                errMsg = ex.Message;
-            }
+            catch (Exception ex) { errMsg = ex.Message; }
 
             // 2. 获取统计中位数
             try
             {
                 var url = $"https://api.warframe.market/v1/items/{slug}/statistics";
-                var json = http.GetStringAsync(url).Result;
+                var json = await WfmGetStringAsync(http, url);
                 using var doc = JsonDocument.Parse(json);
                 var stats = doc.RootElement.GetProperty("payload").GetProperty("statistics_closed").GetProperty("90days");
                 if (stats.GetArrayLength() > 0)
@@ -835,10 +864,7 @@ internal static class Program
                 _wfmCache[slug] = (now, doc.RootElement.Clone());
             }
             result[slug] = priceData;
-
-            // 遵守 wfm 3 req/sec 限流（每个 slug 调了 2 个接口）
-            Thread.Sleep(700);
-        }
+        }));
 
         return JsonSerializer.Serialize(new { ok = true, data = result });
     }

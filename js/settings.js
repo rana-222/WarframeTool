@@ -1,10 +1,16 @@
 // 设置页：关闭行为、自定义提示音、更新公告
 // 版本号（用于更新公告显示）
-const APP_VERSION = "V1.1.1";
+const APP_VERSION = "V1.1.2";
 
 // 更新公告内容
 const UPDATE_ANNOUNCEMENT = `
-<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.1（2026-10-15）</strong></div>
+<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.2（2026-10-15）</strong></div>
+<ul style="margin:8px 0;padding-left:20px;line-height:2">
+  <li>⚡ Warframe Market 价格查询大幅提速：从逐个串行改为并行抓取（全局限流 3 req/sec），遗物 6 件奖励+本体从 20-30 秒降至约 2-5 秒</li>
+  <li>🚀 启动加载提速：裂缝约 0.6 秒就绪，世界状态（周期/突击/虚空风暴）秒级返回；数据源超时从 30 秒降至 10 秒</li>
+  <li>🔧 仲裁效率评级改为独立后台刷新，不再阻塞世界状态数据加载</li>
+</ul>
+<div style="margin:10px 0 6px"><strong>📜 正式版 V1.1.1（2026-10-15）</strong></div>
 <ul style="margin:8px 0;padding-left:20px;line-height:2">
   <li>🌌 虚空裂缝选项卡重构为「普通 / 钢铁 / 九重天」三单级标签，九重天风暴合并展示（数据源无钢铁标记）</li>
   <li>🌍 地球节点昼夜与夜灵平原同步（自 Update 38.5 起已统一），不再出现时间不一致</li>
