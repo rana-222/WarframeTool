@@ -220,11 +220,22 @@ function formatArbiCountdown(startTs){
 
 // ============ 裂缝渲染 ============
 let _allFissures = [];      // 全部裂缝数据缓存
-let _fissureTab = "normal";  // 当前选中的标签页 normal / steel
+let _fissureGroup = "origin"; // 当前分组 origin=始源星系 / railjack=九重天（风暴）
+let _fissureTab = "normal";  // 当前类型标签 normal=普通 / steel=钢铁
+
+const FISSURE_GROUP_ZH = { origin: "始源星系", railjack: "九重天" };
+
+function setFissureGroup(group){
+    _fissureGroup = group;
+    document.querySelectorAll(".group-tab").forEach(btn=>{
+        btn.classList.toggle("active", btn.dataset.fissureGroup === group);
+    });
+    renderFissures(_allFissures);
+}
 
 function setFissureTab(type){
     _fissureTab = type;
-    document.querySelectorAll(".ws-tab").forEach(btn=>{
+    document.querySelectorAll(".ws-tab[data-fissure-type]").forEach(btn=>{
         btn.classList.toggle("active", btn.dataset.fissureType === type);
     });
     renderFissures(_allFissures);
@@ -235,9 +246,11 @@ function renderFissures(data){
     const container = document.getElementById("fissuresList");
     if(!container) return;
 
-    // 按标签页过滤：普通 = !isHard，钢铁 = isHard
+    // 分组过滤：始源星系 = 非风暴；九重天 = 风暴（Railjack）
+    // 类型过滤：普通 = !isHard，钢铁 = isHard
     const filtered = _allFissures.filter(f =>
-        _fissureTab === "steel" ? f.isHard : !f.isHard
+        (_fissureGroup === "railjack" ? f.isStorm : !f.isStorm) &&
+        (_fissureTab === "steel" ? f.isHard : !f.isHard)
     );
 
     // 排序：等级（古→前→中→后→安魂→全能）→ 任务类型（官方顺序）→ 节点名
@@ -250,19 +263,18 @@ function renderFissures(data){
     });
 
     if(filtered.length === 0){
-        container.innerHTML = `<div class="ws-empty">暂无${_fissureTab === "steel" ? "钢铁" : "普通"}裂缝数据</div>`;
+        const typeZh = _fissureTab === "steel" ? "钢铁" : "普通";
+        container.innerHTML = `<div class="ws-empty">暂无${FISSURE_GROUP_ZH[_fissureGroup]}${typeZh}裂缝数据</div>`;
         return;
     }
     const html = filtered.map(f => {
         const tColor = tierColor(f.tier);
         const fColor = factionColor(f.enemy);
-        const storm = f.isStorm ? '<span class="ws-tag storm">风暴</span>' : '';
         return `
         <div class="ws-item fissure-item">
             <div class="ws-item-head">
                 <span class="ws-tier" style="background:${tColor}">${zhTier(f.tier)}</span>
                 <span class="ws-mission">${zhMission(f.missionType)}</span>
-                ${storm}
             </div>
             <div class="ws-node">${zhNode(f.node)}</div>
             <div class="ws-meta">
@@ -275,8 +287,8 @@ function renderFissures(data){
 }
 
 // ============ 仲裁评级 ============
-// 评级由后端根据 arbi.wf.wiki 排行榜各任务类型最高纪录给出：
-// 传奇(S) / 优秀(A系) / 普通(无数据或F)，同时附带该纪录的生息效率 effPct
+// 评级由后端根据 arbi.wf.wiki 排行榜各任务类型最高纪录给出：传奇(S) / 优秀(A系) / 普通(无数据或F)
+// 期望效率由后端按 arbi.guide 各地图节点的每小时精炼精华（VE）期望区间给出（effLow/effHigh，未收录为空）
 const LEVEL_LABEL = {common:"普通", excellent:"优秀", legendary:"传奇"};
 function arbiLevel(a){
     return a.level || "common";
@@ -424,8 +436,8 @@ function renderArbitrations(data){
         const fColor = factionColor(a.faction);
         const lv = arbiLevel(a);
         const current = a.isCurrent ? ' current' : '';
-        const eff = a.effPerHour != null
-            ? `<span class="ws-tag eff" title="该任务类型最高纪录的生息效率（arbi.wf.wiki）">⚡ ${a.effPerHour}/h</span>`
+        const eff = (a.effLow != null && a.effHigh != null)
+            ? `<span class="ws-tag eff" title="arbi.guide 期望效率：该地图节点每小时精炼精华（VE）期望产量区间">⚡ ${a.effLow}-${a.effHigh}/h</span>`
             : '';
         return `
         <div class="ws-item arbi-item${current}">
@@ -564,7 +576,7 @@ function renderCurrentArbi(){
         return;
     }
     const lv = arbiLevel(cur);
-    const eff = cur.effPerHour != null ? `<span class="ws-tag eff">⚡ ${cur.effPerHour}/h</span>` : '';
+    const eff = (cur.effLow != null && cur.effHigh != null) ? `<span class="ws-tag eff">⚡ ${cur.effLow}-${cur.effHigh}/h</span>` : '';
     el.innerHTML = `
         <div class="ws-node arbi-cur-node">${zhNode(cur.node)}</div>
         <div class="ws-meta">
@@ -669,8 +681,12 @@ function initWorldState(){
     document.querySelectorAll(".main-tab").forEach(btn=>{
         btn.addEventListener("click", ()=> switchMainTab(btn.dataset.tab));
     });
-    // 绑定裂缝子标签页
-    document.querySelectorAll(".ws-tab").forEach(btn=>{
+    // 绑定裂缝分组标签（始源星系/九重天）
+    document.querySelectorAll(".group-tab").forEach(btn=>{
+        btn.addEventListener("click", ()=> setFissureGroup(btn.dataset.fissureGroup));
+    });
+    // 绑定裂缝子标签页（普通/钢铁）
+    document.querySelectorAll(".ws-tab[data-fissure-type]").forEach(btn=>{
         btn.addEventListener("click", ()=> setFissureTab(btn.dataset.fissureType));
     });
     // 绑定日历翻页（翻页条：前后一天；展开区：前后月份；图标：展开/收起）

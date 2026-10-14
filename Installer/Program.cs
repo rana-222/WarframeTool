@@ -6,9 +6,19 @@ namespace WarframeInstaller;
 internal static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+
+        // 解析 --wait-pid=N：自动更新场景下，旧版本进程启动安装器后自行退出，
+        // 安装器需等待其完全退出（释放 exe 文件锁）再开始覆盖安装
+        int waitPid = -1;
+        foreach (var a in args)
+        {
+            if (a.StartsWith("--wait-pid="))
+                int.TryParse(a.Substring("--wait-pid=".Length), out waitPid);
+        }
+        bool hasWait = waitPid > 0;
 
         var form = new Form
         {
@@ -65,6 +75,14 @@ internal static class Program
         {
             try
             {
+                // 自动更新：等待旧版本进程完全退出（最多 20 秒）再覆盖安装
+                if (hasWait)
+                {
+                    statusLabel.Text = "等待旧版本退出...";
+                    form.Refresh();
+                    try { Process.GetProcessById(waitPid).WaitForExit(20000); } catch { }
+                }
+
                 statusLabel.Text = "正在解压主程序...";
                 form.Refresh();
 

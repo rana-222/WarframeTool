@@ -1,16 +1,22 @@
 // 设置页：关闭行为、自定义提示音、更新公告
 // 版本号（用于更新公告显示）
-const APP_VERSION = "V1.0.0";
+const APP_VERSION = "V1.1.0";
 
 // 更新公告内容
 const UPDATE_ANNOUNCEMENT = `
-<div style="margin-bottom:10px"><strong>🎉 正式版 V1.0.0（2026-10-02）</strong></div>
+<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.0（2026-10-15）</strong></div>
+<ul style="margin:8px 0;padding-left:20px;line-height:2">
+  <li>⚡ 仲裁期望效率数据修正：改用 arbi.guide 权威数据，按地图节点显示每小时精炼精华（VE）期望产量区间（如 ⚡450-550/h）</li>
+  <li>🚀 新增自动更新：启动时自动检测 GitHub 最新版本，有新版时提示下载安装，安装后自动重启</li>
+  <li>🌌 虚空裂缝分组重构：始源星系 / 九重天（风暴）分开显示，两组均保留 普通/钢铁 筛选</li>
+</ul>
+<div style="margin:10px 0 6px"><strong>📜 正式版 V1.0.0（2026-10-02）</strong></div>
 <ul style="margin:8px 0;padding-left:20px;line-height:2">
   <li>🖥️ 全面转向 WebView2 + C# 桌面应用，移除网页端服务</li>
   <li>🏠 新增「主页」仪表盘：世界环境周期、虚空商人、每日突击、执政官猎杀、当前仲裁一览</li>
   <li>⚡ 虚空裂缝与仲裁队列板块融合至主页，不再单独陈列</li>
   <li>🌐 世界状态数据源切换至 warframestat.us 官方 API，并接入 tenno.tools 备用数据源自动切换，保障数据持续可用</li>
-  <li>📊 仲裁任务评级接入 arbi.wf.wiki 排行榜真实数据（按各任务最高纪录评级），任务卡片直接显示生息效率（如 ⚡598.7/h）</li>
+  <li>📊 仲裁任务评级接入 arbi.wf.wiki 排行榜真实数据（按各任务最高纪录评级）</li>
   <li>📅 仲裁日历改为折叠式：常驻「« 当前日期 »」翻页条，点 📅 展开日历选日期，小窗口不再挤压队列</li>
   <li>📖 新增「Wiki 查找」页：应用内直接浏览灰机 Wiki（warframe.huijiwiki.com），支持站内搜索与返回工具</li>
   <li>📜 裂缝/仲裁列表面板固定高度、内部滚动，页面不再冗长；评级筛选支持一行/两行自适应</li>

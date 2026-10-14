@@ -19,6 +19,15 @@ internal static class Program
     // 设置：关闭窗口行为 (exit / tray)
     public static string CloseBehavior = "exit";
 
+    // 当前程序版本（来自程序集 Version，如 1.1.0）
+    public static readonly Version AppVersion = CreateAppVersion();
+
+    private static Version CreateAppVersion()
+    {
+        var v = Assembly.GetExecutingAssembly().GetName().Version!;
+        return new Version(v.Major, v.Minor, Math.Max(v.Build, 0));
+    }
+
     // 设置持久化文件
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -500,10 +509,32 @@ internal static class Program
         return "{\"ok\":true,\"stale\":true}";
     }
 
-    // ---- 仲裁生息效率评级（arbi.wf.wiki leaderboard）----
-    // 每任务类型取 perHour 最高记录，读取该记录的生息效率 perHour（数值，单位 /h）与评级 grade
-    // 英文任务名 → { effPerHour 生息效率/h, level 评级 }
-    private static Dictionary<string, (double? effPerHour, string level)> _arbiEff = new();
+    // ---- 仲裁评级（arbi.wf.wiki leaderboard）----
+    // 每任务类型取 perHour 最高记录的评级 grade（效率数值不再使用排行榜，改用 arbi.guide 期望数据）
+    private static Dictionary<string, string> _arbiLevel = new();
+
+    // ---- 期望生息效率（arbi.guide 数据：每小时精炼精华 VE 期望区间，按地图节点）----
+    // 仅 arbi.guide 收录的任务类型有数据（生存/防御/拦截/挖掘/中断），未收录任务不显示期望效率
+    private static readonly Dictionary<string, (int low, int high)> ExpectedVe = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // 挖掘
+        ["Callisto"] = (800, 1000), ["Sinai"] = (400, 500), ["Io"] = (400, 500),
+        ["Umbriel"] = (400, 700), ["Stephano"] = (450, 550), ["Alator"] = (800, 1000),
+        // 拦截
+        ["Cytherean"] = (800, 1000), ["Xini"] = (800, 1000), ["Mithra"] = (600, 750), ["Berehynia"] = (200, 400),
+        // 防御
+        ["Gulliver"] = (400, 500), ["Romula"] = (400, 500), ["Proteus"] = (400, 500),
+        ["Casta"] = (450, 550), ["Seimeni"] = (450, 550), ["Hydron"] = (400, 550), ["Helene"] = (400, 550),
+        ["Paimon"] = (450, 550), ["Larzac"] = (450, 550), ["Akkad"] = (450, 550), ["Kala-Azar"] = (450, 550),
+        ["Coba"] = (400, 550), ["Lith"] = (400, 550), ["Hyf"] = (450, 600), ["Stöfler"] = (400, 500),
+        // 生存
+        ["Kadesh"] = (450, 550), ["Spear"] = (450, 550), ["Taranis"] = (450, 550), ["Belenus"] = (450, 550),
+        ["Cinxia"] = (600, 800), ["Odin"] = (500, 700), ["Sechura"] = (450, 550), ["Tessera"] = (450, 550),
+        ["Outer Terminus"] = (450, 550), ["Cerberus"] = (450, 550), ["Rhea"] = (550, 625),
+        ["Larez"] = (550, 625), ["Larezzz"] = (550, 625), ["Sangeru"] = (550, 625), ["Gaia"] = (400, 500),
+        // 中断
+        ["Tyana Pass"] = (700, 1000), ["Munio"] = (600, 900), ["Ose"] = (600, 800), ["Oestrus"] = (500, 700),
+    };
 
     // 中文任务名（leaderboard）→ 英文（本地仲裁时间表 MissionTypeMap）
     private static readonly Dictionary<string, string> MissionZhEn = new()
@@ -529,13 +560,13 @@ internal static class Program
         _ => "common"
     };
 
-    // 拉取 leaderboard 两页（共 75 行），按任务类型聚合出最高 perHour 记录的生息效率
+    // 拉取 leaderboard 两页（共 75 行），按任务类型聚合出最高 perHour 记录的评级 grade
     private static void LoadArbiLeaderboard()
     {
         try
         {
-            // best[任务中文名] = (perHour, profPct, grade)
-            var best = new Dictionary<string, (double perHour, double profPct, string? grade)>();
+            // best[任务中文名] = (perHour, grade)（取 perHour 最高纪录的评级）
+            var best = new Dictionary<string, (double perHour, string? grade)>(StringComparer.Ordinal);
             foreach (var url in new[]
             {
                 "https://arbi.wf.wiki/api/leaderboard",
@@ -557,24 +588,21 @@ internal static class Program
                     if (string.IsNullOrEmpty(missionZh)) continue;
                     if (!r.TryGetProperty("perHour", out var ph) || ph.ValueKind != JsonValueKind.Number) continue;
                     var perHour = ph.GetDouble();
-                    var profPct = r.TryGetProperty("profPct", out var pp) && pp.ValueKind == JsonValueKind.Number
-                        ? pp.GetDouble() : 0;
                     var grade = r.TryGetProperty("grade", out var g) ? g.GetString() : null;
                     if (!best.TryGetValue(missionZh, out var cur) || perHour > cur.perHour)
-                        best[missionZh] = (perHour, profPct, grade);
+                        best[missionZh] = (perHour, grade);
                 }
             }
             if (best.Count == 0) return; // 拉取失败时保留旧评级
 
             // 转换为英文任务名键（引用替换，线程安全）
-            // best 值结构：(perHour, profPct, grade)——生息效率取 perHour（每小时的生息量，即详情页 h 值）
-            var eff = new Dictionary<string, (double?, string)>();
-            foreach (var (missionZh, (perHour, _, grade)) in best)
+            var lv = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var (missionZh, (_, grade)) in best)
             {
                 if (!MissionZhEn.TryGetValue(missionZh, out var en)) continue;
-                eff[en] = (perHour > 0 ? perHour : null, GradeToLevel(grade));
+                lv[en] = GradeToLevel(grade);
             }
-            _arbiEff = eff;
+            _arbiLevel = lv;
         }
         catch { /* 失败时保留旧评级 */ }
     }
@@ -601,7 +629,7 @@ internal static class Program
             var nodeKey = _arbysNodeList[seqIdx];
             var startTs = _arbysStartTs + (long)i * _arbysStepSec;
 
-            string node = nodeKey, missionType = "Unknown", faction = "Unknown";
+            string node = nodeKey, missionType = "Unknown", faction = "Unknown", nameZh = "";
             if (_arbysNodeMeta.TryGetValue(nodeKey, out var meta))
             {
                 var mtCode = meta.TryGetProperty("missionType", out var mt) ? mt.GetString() ?? "" : "";
@@ -612,18 +640,19 @@ internal static class Program
                 faction = FactionMap.TryGetValue(fcCode, out var fcEn) ? fcEn
                     : (meta.TryGetProperty("factionNameZh", out var fcZh) ? fcZh.GetString() ?? "Unknown" : "Unknown");
 
-                var nameZh = meta.TryGetProperty("nameZh", out var nz) ? nz.GetString() ?? "" : "";
+                nameZh = meta.TryGetProperty("nameZh", out var nz) ? nz.GetString() ?? "" : "";
                 var sysZh = meta.TryGetProperty("systemNameZh", out var sz) ? sz.GetString() ?? "" : "";
                 node = string.IsNullOrEmpty(sysZh) ? (string.IsNullOrEmpty(nameZh) ? nodeKey : nameZh) : $"{nameZh} ({sysZh})";
             }
 
-            // 附加生息效率评级（来自 arbi.wf.wiki leaderboard，无数据默认普通）
-            string level = "common";
-            double? effPerHour = null;
-            if (_arbiEff.TryGetValue(missionType, out var eff))
+            // 评级（arbi.wf.wiki leaderboard grade，无数据默认普通）
+            // 期望效率（arbi.guide：按地图节点的每小时精炼精华期望区间，未收录则不显示）
+            string level = _arbiLevel.TryGetValue(missionType, out var lv2) ? lv2 : "common";
+            int? effLow = null, effHigh = null;
+            if (!string.IsNullOrEmpty(nameZh) && ExpectedVe.TryGetValue(nameZh, out var ve))
             {
-                level = eff.level;
-                effPerHour = eff.effPerHour;
+                effLow = ve.low;
+                effHigh = ve.high;
             }
 
             result.Add(new
@@ -635,7 +664,8 @@ internal static class Program
                 missionType = missionType,
                 faction = faction,
                 level = level,
-                effPerHour = effPerHour,
+                effLow = effLow,
+                effHigh = effHigh,
                 isCurrent = (long)i == currentHourIdx
             });
         }
