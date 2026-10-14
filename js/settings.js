@@ -1,10 +1,17 @@
 // 设置页：关闭行为、自定义提示音、更新公告
 // 版本号（用于更新公告显示）
-const APP_VERSION = "V1.1.0";
+const APP_VERSION = "V1.1.1";
 
 // 更新公告内容
 const UPDATE_ANNOUNCEMENT = `
-<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.0（2026-10-15）</strong></div>
+<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.1（2026-10-15）</strong></div>
+<ul style="margin:8px 0;padding-left:20px;line-height:2">
+  <li>🌌 虚空裂缝选项卡重构为「普通 / 钢铁 / 九重天」三单级标签，九重天风暴合并展示（数据源无钢铁标记）</li>
+  <li>🌍 地球节点昼夜与夜灵平原同步（自 Update 38.5 起已统一），不再出现时间不一致</li>
+  <li>🟠 新增火卫二魔胎之阈「混乱 / 秩序」周期显示，与平原周期同步</li>
+  <li>💎 遗物搜索优化：支持「前纪 A3」「前纪A3」「前A3」等模糊匹配，输入「A3」列出所有含 A3 的遗物</li>
+</ul>
+<div style="margin:10px 0 6px"><strong>📜 正式版 V1.1.0（2026-10-15）</strong></div>
 <ul style="margin:8px 0;padding-left:20px;line-height:2">
   <li>⚡ 仲裁期望效率数据修正：改用 arbi.guide 权威数据，按地图节点显示每小时精炼精华（VE）期望产量区间（如 ⚡450-550/h）</li>
   <li>🚀 新增自动更新：启动时自动检测 GitHub 最新版本，有新版时提示下载安装，安装后自动重启</li>

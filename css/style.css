@@ -302,15 +302,6 @@ body.sidebar-collapsed .tab-content-wrap{
     padding:4px 0;
     font-size:12.5px;
 }
-/* 分组标签（始源星系/九重天）：绿色高亮与类型标签（普通/钢铁）区分层级 */
-.ws-group-tabs .ws-tab{
-    flex:0 0 72px;   /* 显式宽度：规避 WebView2 首帧 flex-basis:auto 宽度异常 */
-}
-.ws-group-tabs .ws-tab.active{
-    background:var(--green);
-    color:#fff;
-    box-shadow:2px 2px 0 var(--ink);
-}
 .home-level-filter{
     margin-bottom:0;
     flex-wrap:wrap;       /* 允许换行：窄面板时一行或两行呈现，不竖排 */

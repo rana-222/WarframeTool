@@ -29,17 +29,22 @@ async function initRelics() {
         return;
     }
 
-    // 搜索输入（支持中英文）
+    // 搜索输入（支持中英文、空格、纪名缩写：前纪A3 / 前A3 / A3 均可）
     searchInput.addEventListener('input', function() {
-        const q = this.value.trim().toLowerCase();
+        // 去除查询词中所有空格并转小写
+        let q = this.value.trim().toLowerCase().replace(/\s+/g, '');
         if (!q) {
             dropdown.classList.remove('show');
             return;
         }
         const matches = _relicsData.relics.filter(r => {
-            const en = (r.n || '').toLowerCase();
-            const zh = (r.z || '').toLowerCase();
-            return en.includes(q) || zh.includes(q);
+            // 英文名去空格："Axi A3" → "axia3"
+            const en = (r.n || '').toLowerCase().replace(/\s+/g, '');
+            // 中文名去空格："前纪 A3 遗物" → "前纪a3遗物"
+            const zh = (r.z || '').toLowerCase().replace(/\s+/g, '');
+            // 中文纪名缩写：去掉"纪"字 → "前a3遗物"，支持"前A3"这类输入
+            const zhAbbr = zh.replace(/纪/g, '');
+            return en.includes(q) || zh.includes(q) || zhAbbr.includes(q);
         }).slice(0, 30);
         if (matches.length === 0) {
             dropdown.innerHTML = '<div class="relic-dropdown-item" style="color:var(--muted)">无匹配遗物</div>';

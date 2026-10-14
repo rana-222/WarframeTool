@@ -220,23 +220,16 @@ function formatArbiCountdown(startTs){
 
 // ============ 裂缝渲染 ============
 let _allFissures = [];      // 全部裂缝数据缓存
-let _fissureGroup = "origin"; // 当前分组 origin=始源星系 / railjack=九重天（风暴）
-let _fissureTab = "normal";  // 当前类型标签 normal=普通 / steel=钢铁
+// 单级三选项卡：normal=始源星系普通 / steel=始源星系钢铁 / railjack=九重天（全部风暴）
+// 九重天风暴数据源无 hard 字段，无法区分普通/钢铁，故合并为一个选项卡
+let _fissureTab = "normal";
 
-const FISSURE_GROUP_ZH = { origin: "始源星系", railjack: "九重天" };
-
-function setFissureGroup(group){
-    _fissureGroup = group;
-    document.querySelectorAll(".group-tab").forEach(btn=>{
-        btn.classList.toggle("active", btn.dataset.fissureGroup === group);
-    });
-    renderFissures(_allFissures);
-}
+const FISSURE_TAB_ZH = { normal: "普通", steel: "钢铁", railjack: "九重天" };
 
 function setFissureTab(type){
     _fissureTab = type;
-    document.querySelectorAll(".ws-tab[data-fissure-type]").forEach(btn=>{
-        btn.classList.toggle("active", btn.dataset.fissureType === type);
+    document.querySelectorAll(".ws-tab[data-fissure-tab]").forEach(btn=>{
+        btn.classList.toggle("active", btn.dataset.fissureTab === type);
     });
     renderFissures(_allFissures);
 }
@@ -246,12 +239,14 @@ function renderFissures(data){
     const container = document.getElementById("fissuresList");
     if(!container) return;
 
-    // 分组过滤：始源星系 = 非风暴；九重天 = 风暴（Railjack）
-    // 类型过滤：普通 = !isHard，钢铁 = isHard
-    const filtered = _allFissures.filter(f =>
-        (_fissureGroup === "railjack" ? f.isStorm : !f.isStorm) &&
-        (_fissureTab === "steel" ? f.isHard : !f.isHard)
-    );
+    // 三选项卡过滤：
+    //   normal  = 始源星系普通（!isStorm && !isHard）
+    //   steel   = 始源星系钢铁（!isStorm &&  isHard）
+    //   railjack = 九重天全部风暴（isStorm，不区分普通/钢铁）
+    const filtered = _allFissures.filter(f => {
+        if(_fissureTab === "railjack") return f.isStorm;
+        return !f.isStorm && (_fissureTab === "steel" ? f.isHard : !f.isHard);
+    });
 
     // 排序：等级（古→前→中→后→安魂→全能）→ 任务类型（官方顺序）→ 节点名
     filtered.sort((a, b) => {
@@ -263,8 +258,7 @@ function renderFissures(data){
     });
 
     if(filtered.length === 0){
-        const typeZh = _fissureTab === "steel" ? "钢铁" : "普通";
-        container.innerHTML = `<div class="ws-empty">暂无${FISSURE_GROUP_ZH[_fissureGroup]}${typeZh}裂缝数据</div>`;
+        container.innerHTML = `<div class="ws-empty">暂无${FISSURE_TAB_ZH[_fissureTab]}裂缝数据</div>`;
         return;
     }
     const html = filtered.map(f => {
@@ -472,7 +466,7 @@ const CYCLE_DEF = {
     earthCycle:   { name:"地球",       states:{day:"☀️ 白天", night:"🌑 夜晚"} },
     cetusCycle:   { name:"夜灵平原",   states:{day:"☀️ 白天", night:"🌑 夜晚"} },
     vallisCycle:  { name:"奥布山谷",   states:{warm:"🔥 温暖", cold:"❄️ 寒冷"} },
-    cambionCycle: { name:"魔胎之阈",   states:{fass:"🟠 法司", vome:"🔵 沃姆"} },
+    cambionCycle: { name:"魔胎之阈",   states:{fass:"🟠 混乱", vome:"🔵 秩序"} },
     zarimanCycle: { name:"扎里曼号",   states:{corpus:"🔵 科普斯", grineer:"🔴 格里尔"} },
     duviriCycle:  { name:"双衍王境",   states:{fear:"😨 恐惧", sorrow:"😢 悲伤", anger:"😡 愤怒", joy:"😊 欢乐", envy:"😒 嫉妒"} },
 };
@@ -681,13 +675,9 @@ function initWorldState(){
     document.querySelectorAll(".main-tab").forEach(btn=>{
         btn.addEventListener("click", ()=> switchMainTab(btn.dataset.tab));
     });
-    // 绑定裂缝分组标签（始源星系/九重天）
-    document.querySelectorAll(".group-tab").forEach(btn=>{
-        btn.addEventListener("click", ()=> setFissureGroup(btn.dataset.fissureGroup));
-    });
-    // 绑定裂缝子标签页（普通/钢铁）
-    document.querySelectorAll(".ws-tab[data-fissure-type]").forEach(btn=>{
-        btn.addEventListener("click", ()=> setFissureTab(btn.dataset.fissureType));
+    // 绑定裂缝三选项卡（普通/钢铁/九重天）
+    document.querySelectorAll(".ws-tab[data-fissure-tab]").forEach(btn=>{
+        btn.addEventListener("click", ()=> setFissureTab(btn.dataset.fissureTab));
     });
     // 绑定日历翻页（翻页条：前后一天；展开区：前后月份；图标：展开/收起）
     const prevBtn = document.getElementById("calPrev");

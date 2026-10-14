@@ -287,7 +287,7 @@ internal static class Program
               .Append(",\"missionType\":").Append(f.GetProperty("missionType").GetRawText())
               .Append(",\"tier\":").Append(f.GetProperty("tier").GetRawText())
               .Append(",\"isStorm\":").Append(isStorm ? "true" : "false")
-              .Append(",\"isHard\":").Append(isStorm ? "true" : (f.TryGetProperty("hard", out var h) && h.GetBoolean() ? "true" : "false"))
+              .Append(",\"isHard\":").Append(f.TryGetProperty("hard", out var h) && h.GetBoolean() ? "true" : "false")
               .Append(",\"activation\":").Append(f.GetProperty("start").GetInt64())
               .Append(",\"expiry\":").Append(f.GetProperty("end").GetInt64())
               .Append('}');
@@ -330,22 +330,42 @@ internal static class Program
     }
 
     // 世界状态摘要：周期（本地计算）+ 商人 + 突击（tenno 格式转换）+ 执政官（tenno 无此数据）
+    // 自 Update 38.5 起，地球节点昼夜与夜灵平原（Cetus）同步（100min昼/50min夜）；
+    // 火卫二魔胎之阈 Fass/Vome 周期也与平原同步（Fass=昼=混乱，Vome=夜=秩序）。
+    // 故 earthCycle / cetusCycle / cambionCycle 均由 cetus 数据推导，保证三者一致。
     private static string ConvertTennoSummary(JsonElement root)
     {
         var sb = new StringBuilder();
-        sb.Append(",\"earthCycle\":").Append(EarthCycleJson()); // 官方规律本地计算
+        JsonElement? cetus = null;
+        JsonElement? fortuna = null;
         if (root.TryGetProperty("daynight", out var dn) && dn.TryGetProperty("data", out var cycles))
         {
             foreach (var c in cycles.EnumerateArray())
             {
                 var id = c.GetProperty("id").GetString();
-                if (id == "cetus")
-                    sb.Append(",\"cetusCycle\":").Append(CycleJson(c, "day", "night"));
-                else if (id == "fortuna")
-                    sb.Append(",\"vallisCycle\":").Append(CycleJson(c, "warm", "cold"));
+                if (id == "cetus") cetus = c;
+                else if (id == "fortuna") fortuna = c;
             }
         }
-        sb.Append(",\"cambionCycle\":null,\"zarimanCycle\":null,\"duviriCycle\":null");
+
+        if (cetus.HasValue)
+        {
+            var c = cetus.Value;
+            sb.Append(",\"earthCycle\":").Append(CycleJson(c, "day", "night"));
+            sb.Append(",\"cetusCycle\":").Append(CycleJson(c, "day", "night"));
+            sb.Append(",\"cambionCycle\":").Append(CycleJson(c, "fass", "vome"));
+        }
+        else
+        {
+            sb.Append(",\"earthCycle\":null,\"cetusCycle\":null,\"cambionCycle\":null");
+        }
+
+        if (fortuna.HasValue)
+            sb.Append(",\"vallisCycle\":").Append(CycleJson(fortuna.Value, "warm", "cold"));
+        else
+            sb.Append(",\"vallisCycle\":null");
+
+        sb.Append(",\"zarimanCycle\":null,\"duviriCycle\":null");
 
         // 虚空商人 {start, end, name, location, active} → {activation, expiry, character, location}
         if (root.TryGetProperty("voidtraders", out var vtRoot) && vtRoot.TryGetProperty("data", out var vts)
@@ -445,8 +465,25 @@ internal static class Program
                 var root = doc.RootElement;
 
                 var sb = new StringBuilder();
-                foreach (var key in new[] { "earthCycle", "cetusCycle", "vallisCycle", "cambionCycle", "zarimanCycle", "duviriCycle" })
-                    sb.Append(",\"").Append(key).Append("\":").Append(RawOrNull(root, key));
+                // 地球节点昼夜自 Update38.5 起与夜灵平原同步；火卫二 Fass/Vome 也与平原同步。
+                // 强制 earthCycle=cetusCycle，cambionCycle 由 cetus state 映射（day→fass, night→vome），保证三者一致。
+                var cetusRaw = RawOrNull(root, "cetusCycle");
+                sb.Append(",\"earthCycle\":").Append(cetusRaw);
+                sb.Append(",\"cetusCycle\":").Append(cetusRaw);
+                sb.Append(",\"vallisCycle\":").Append(RawOrNull(root, "vallisCycle"));
+                if (root.TryGetProperty("cetusCycle", out var cetusEl) && cetusEl.ValueKind == JsonValueKind.Object
+                    && cetusEl.TryGetProperty("state", out var csEl) && cetusEl.TryGetProperty("expiry", out var ceEl))
+                {
+                    var st = csEl.GetString();
+                    var cambionState = st == "day" ? "fass" : "vome";
+                    sb.Append(",\"cambionCycle\":{\"state\":\"").Append(cambionState).Append("\",\"expiry\":").Append(ceEl.GetInt64()).Append("}");
+                }
+                else
+                {
+                    sb.Append(",\"cambionCycle\":null");
+                }
+                sb.Append(",\"zarimanCycle\":").Append(RawOrNull(root, "zarimanCycle"));
+                sb.Append(",\"duviriCycle\":").Append(RawOrNull(root, "duviriCycle"));
                 sb.Append(",\"voidTrader\":").Append(RawOrNull(root, "voidTrader"));
                 sb.Append(",\"sortie\":").Append(RawOrNull(root, "sortie"));
                 sb.Append(",\"archonHunt\":").Append(RawOrNull(root, "archonHunt"));
