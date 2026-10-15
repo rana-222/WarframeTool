@@ -10,7 +10,7 @@
     <StartupObject />
     <AssemblyName>WarframeTool</AssemblyName>
     <RootNamespace>WarframeTool</RootNamespace>
-    <Version>1.1.3</Version>
+    <Version>1.1.4</Version>
     <AssemblyTitle>Warframe 玩家工具</AssemblyTitle>
     <Product>Warframe 玩家工具</Product>
     <Copyright>Warframe Tool</Copyright>

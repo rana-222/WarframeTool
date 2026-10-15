@@ -460,7 +460,7 @@ function setLevelFilter(level){
     renderArbitrations(_allArbitrations);
 }
 
-// ============ 仲裁效率编辑面板 ============
+// ============ 仲裁效率行内编辑（点击单条任务编辑）============
 const ARBI_LEVEL_OPTS = [
     {value:"", label:"自动（按效率推导）"},
     {value:"excellent", label:"卓越"},
@@ -468,130 +468,145 @@ const ARBI_LEVEL_OPTS = [
     {value:"common", label:"普通"},
     {value:"undetermined", label:"未定"}
 ];
-let _arbiCfgCache = {};   // 当前配置缓存 {节点: {low,high,level,derived}}
+// 当前正在编辑的仲裁项唯一键（start 时间戳 + nodeKey）
+let _editingArbiKey = null;
 
-async function openArbiEditPanel(){
-    const panel = document.getElementById("arbiEditPanel");
-    if(!panel) return;
-    panel.style.display = "block";
-    await loadArbiConfigToTable();
-}
-function closeArbiEditPanel(){
-    const panel = document.getElementById("arbiEditPanel");
-    if(panel) panel.style.display = "none";
+function arbiItemKey(a){ return a.start + "_" + a.nodeKey; }
+
+// 切换某条任务的编辑态
+function toggleArbiEdit(a){
+    const key = arbiItemKey(a);
+    _editingArbiKey = (_editingArbiKey === key) ? null : key;
+    renderArbitrations(_allArbitrations);
 }
 
-async function loadArbiConfigToTable(){
-    const tbody = document.querySelector("#arbiEditTable tbody");
-    if(!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:12px">加载中…</td></tr>';
-    try{
-        const resp = await fetch("/api/arbi-config");
-        const json = await resp.json();
-        if(!json.ok) throw new Error(json.error || "加载失败");
-        _arbiCfgCache = json.nodes;
-        const names = Object.keys(json.nodes).sort();
-        if(names.length === 0){ tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:12px">暂无数据，可在下方导入</td></tr>'; return; }
-        tbody.innerHTML = names.map(name => {
-            const n = json.nodes[name];
-            const lv = n.level || "";
-            const opts = ARBI_LEVEL_OPTS.map(o => `<option value="${o.value}" ${o.value===lv?"selected":""}>${o.label}</option>`).join("");
-            return `<tr data-name="${name}">
-                <td class="arbi-name">${name}</td>
-                <td><input type="number" class="arbi-input" data-field="low" value="${n.low}" min="0"></td>
-                <td><input type="number" class="arbi-input" data-field="high" value="${n.high}" min="0"></td>
-                <td><select class="arbi-input" data-field="level">${opts}</select></td>
-            </tr>`;
-        }).join("");
-    }catch(e){
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:12px;color:#c00">加载失败：${e.message}</td></tr>`;
+// 渲染仲裁列表（支持行内编辑态）
+function renderArbitrations(data){
+    _allArbitrations = data || [];
+    const container = document.getElementById("arbitrationsList");
+    if(!container) return;
+
+    // 默认选中今天
+    if(!_selectedDate){
+        _selectedDate = new Date();
+        _selectedDate.setHours(0,0,0,0);
     }
+
+    renderCalendar();
+
+    const selKey = dateKey(_selectedDate);
+    let filtered = _allArbitrations.filter(a => dayKey(a.start) === selKey);
+
+    // 等级筛选
+    if(_levelFilter !== "all"){
+        filtered = filtered.filter(a => arbiLevel(a) === _levelFilter);
+    }
+
+    // 按时间排序
+    filtered.sort((a,b) => a.start - b.start);
+
+    // 同步更新主页「当前仲裁」卡片
+    renderCurrentArbi();
+
+    if(filtered.length === 0){
+        container.innerHTML = `<div class="ws-empty">当日无${_levelFilter === "all" ? "" : LEVEL_LABEL[_levelFilter]+"级"}仲裁任务</div>`;
+        return;
+    }
+
+    const html = filtered.map(a => {
+        const fColor = factionColor(a.faction);
+        const lv = arbiLevel(a);
+        const current = a.isCurrent ? ' current' : '';
+        const eff = (a.effLow != null && a.effHigh != null)
+            ? `<span class="ws-tag eff" title="每小时精炼精华（VE）期望产量区间">⚡ ${a.effLow}-${a.effHigh}/h</span>`
+            : '<span class="ws-tag eff undef" title="暂无效率数据，点击编辑">⚡ 未录入</span>';
+        const isEditing = _editingArbiKey === arbiItemKey(a);
+        const opts = ARBI_LEVEL_OPTS.map(o => `<option value="${o.value}" ${o.value===(a.effOverride||"")?"selected":""}>${o.label}</option>`).join("");
+        const editHtml = isEditing ? `
+            <div class="arbi-inline-edit" onclick="event.stopPropagation()">
+                <div class="arbi-edit-row">
+                    <label>效率：</label>
+                    <input type="number" class="arbi-input" id="arbiLow_${a.start}" value="${a.effLow ?? 0}" min="0" style="width:70px">
+                    <span>—</span>
+                    <input type="number" class="arbi-input" id="arbiHigh_${a.start}" value="${a.effHigh ?? 0}" min="0" style="width:70px">
+                    <span>/h</span>
+                </div>
+                <div class="arbi-edit-row">
+                    <label>评级：</label>
+                    <select class="arbi-input" id="arbiLv_${a.start}">${opts}</select>
+                </div>
+                <div class="arbi-edit-row">
+                    <button class="arbi-save-btn" onclick="saveArbiNode('${a.nameZh || a.nodeKey}', ${a.start})">💾 保存</button>
+                    <button class="arbi-cancel-btn" onclick="toggleArbiEdit(_allArbitrations.find(x=>arbiItemKey(x)==='${arbiItemKey(a)}'))">取消</button>
+                    <span class="arbi-edit-status" id="arbiStatus_${a.start}"></span>
+                </div>
+            </div>` : '';
+        return `
+        <div class="ws-item arbi-item${current}${isEditing?' editing':''}" onclick="toggleArbiEdit(_allArbitrations.find(x=>arbiItemKey(x)==='${arbiItemKey(a)}'))">
+            <div class="ws-item-head">
+                <span class="ws-arbi-time">${formatArbiTime(a.start)}</span>
+                ${a.isCurrent ? '<span class="ws-tag live">LIVE</span>' : ''}
+                <span class="lv-tag ${lv}">${LEVEL_LABEL[lv]}</span>
+                ${eff}
+            </div>
+            <div class="ws-node">${zhNode(a.node)}</div>
+            <div class="ws-meta">
+                <span class="ws-faction" style="color:${fColor}">${a.faction || '-'}</span>
+                <span class="ws-mission">${zhMission(a.missionType)}</span>
+            </div>
+            <div class="ws-countdown" data-start="${a.start}">${formatArbiCountdown(a.start)}</div>
+            ${editHtml}
+        </div>`;
+    }).join("");
+    container.innerHTML = html;
 }
 
-function collectArbiConfigFromTable(){
-    const rows = document.querySelectorAll("#arbiEditTable tbody tr[data-name]");
-    const nodes = {};
-    rows.forEach(row => {
-        const name = row.dataset.name;
-        const low = parseInt(row.querySelector('[data-field="low"]').value) || 0;
-        const high = parseInt(row.querySelector('[data-field="high"]').value) || 0;
-        const level = row.querySelector('[data-field="level"]').value;
-        const entry = {low, high};
-        if(level) entry.level = level;
-        nodes[name] = entry;
-    });
-    return nodes;
-}
-
-async function saveArbiConfig(){
-    const status = document.getElementById("arbiEditStatus");
+// 保存单个节点的效率配置
+async function saveArbiNode(nodeName, startTs){
+    const status = document.getElementById(`arbiStatus_${startTs}`);
     if(status) status.textContent = "保存中…";
     try{
-        const nodes = collectArbiConfigFromTable();
-        const resp = await fetch("/api/arbi-config", {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({nodes})
-        });
-        const json = await resp.json();
-        if(!json.ok) throw new Error(json.error || "保存失败");
-        if(status) status.textContent = `✓ 已保存 ${json.count} 条`;
-        // 刷新仲裁列表
-        if(_allArbitrations.length) renderArbitrations(_allArbitrations);
-    }catch(e){
-        if(status) status.textContent = "✗ " + e.message;
-    }
-}
-
-async function resetArbiConfig(){
-    if(!confirm("确定恢复为内置默认效率数据？当前自定义将被覆盖。")) return;
-    // 重新加载默认：通过 GET 拿到当前（若用户改过则已是用户的），这里直接用内置默认重存
-    // 简化：删除配置文件不可行，改为发空 nodes 不行。用前端内置默认覆盖。
-    const status = document.getElementById("arbiEditStatus");
-    if(status) status.textContent = "恢复中…";
-    try{
-        // 从后端拿当前，然后用默认效率值覆盖（保留节点结构）
-        // 由于后端没有 reset 端点，这里直接用前端默认数据 POST
+        const low = parseInt(document.getElementById(`arbiLow_${startTs}`).value) || 0;
+        const high = parseInt(document.getElementById(`arbiHigh_${startTs}`).value) || 0;
+        const level = document.getElementById(`arbiLv_${startTs}`).value;
+        // 拉取当前配置，合并该节点
         const resp = await fetch("/api/arbi-config");
         const json = await resp.json();
-        const cur = json.nodes || {};
-        const defaults = {
-            "Callisto":[800,1000],"Sinai":[400,500],"Io":[400,500],"Umbriel":[400,700],
-            "Stephano":[450,550],"Alator":[800,1000],"Cytherean":[800,1000],"Xini":[800,1000],
-            "Mithra":[600,750],"Berehynia":[200,400],"Gulliver":[400,500],"Romula":[400,500],
-            "Proteus":[400,500],"Casta":[450,550],"Seimeni":[450,550],"Hydron":[400,550],
-            "Helene":[400,550],"Paimon":[450,550],"Larzac":[450,550],"Akkad":[450,550],
-            "Kala-Azar":[450,550],"Coba":[400,550],"Lith":[400,550],"Hyf":[450,600],
-            "Stöfler":[400,500],"Kadesh":[450,550],"Spear":[450,550],"Taranis":[450,550],
-            "Belenus":[450,550],"Cinxia":[600,800],"Odin":[500,700],"Sechura":[450,550],
-            "Tessera":[450,550],"Outer Terminus":[450,550],"Cerberus":[450,550],"Rhea":[550,625],
-            "Larez":[550,625],"Larezzz":[550,625],"Sangeru":[550,625],"Gaia":[400,500],
-            "Tyana Pass":[700,1000],"Munio":[600,900],"Ose":[600,800],"Oestrus":[500,700]
-        };
-        const nodes = {};
-        for(const [k,[low,high]] of Object.entries(defaults)) nodes[k] = {low, high};
-        const r2 = await fetch("/api/arbi-config", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({nodes})});
+        const nodes = json.nodes || {};
+        const entry = {low, high};
+        if(level) entry.level = level;
+        nodes[nodeName] = entry;
+        const r2 = await fetch("/api/arbi-config", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({nodes})
+        });
         const j2 = await r2.json();
         if(!j2.ok) throw new Error(j2.error);
-        await loadArbiConfigToTable();
-        if(status) status.textContent = `✓ 已恢复默认（${j2.count} 条）`;
-        if(_allArbitrations.length) renderArbitrations(_allArbitrations);
+        if(status) status.textContent = "✓ 已保存";
+        // 更新本地缓存的该项数据并刷新
+        const item = _allArbitrations.find(x => x.start === startTs && (x.nameZh === nodeName || x.nodeKey === nodeName));
+        if(item){
+            item.effLow = low; item.effHigh = high;
+            item.level = level || (high >= 700 ? "excellent" : high >= 500 ? "recommended" : high >= 300 ? "common" : "undetermined");
+        }
+        setTimeout(()=>{ _editingArbiKey = null; renderArbitrations(_allArbitrations); }, 600);
     }catch(e){
         if(status) status.textContent = "✗ " + e.message;
     }
 }
 
+// 批量导入效率 JSON（合并到当前配置）
 async function importArbiConfig(){
     const area = document.getElementById("arbiImportArea");
-    const status = document.getElementById("arbiEditStatus");
     if(!area) return;
     const text = area.value.trim();
-    if(!text){ if(status) status.textContent = "请粘贴 JSON"; return; }
+    if(!text){ alert("请粘贴 JSON"); return; }
     try{
         const imported = JSON.parse(text);
         if(typeof imported !== "object") throw new Error("JSON 必须是对象");
-        // 合并到当前表格数据
-        const current = collectArbiConfigFromTable();
+        const resp = await fetch("/api/arbi-config");
+        const json = await resp.json();
+        const nodes = json.nodes || {};
         let added = 0, updated = 0;
         for(const [name, val] of Object.entries(imported)){
             if(!val || typeof val !== "object") continue;
@@ -600,18 +615,20 @@ async function importArbiConfig(){
             const entry = {low, high};
             if(val.level && ["excellent","recommended","common","undetermined"].includes(val.level))
                 entry.level = val.level;
-            if(current[name]) updated++; else added++;
-            current[name] = entry;
+            if(nodes[name]) updated++; else added++;
+            nodes[name] = entry;
         }
-        const resp = await fetch("/api/arbi-config", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({nodes:current})});
-        const json = await resp.json();
-        if(!json.ok) throw new Error(json.error);
-        await loadArbiConfigToTable();
+        const r2 = await fetch("/api/arbi-config", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({nodes})
+        });
+        const j2 = await r2.json();
+        if(!j2.ok) throw new Error(j2.error);
         area.value = "";
-        if(status) status.textContent = `✓ 导入完成（新增 ${added}，更新 ${updated}，共 ${json.count} 条）`;
-        if(_allArbitrations.length) renderArbitrations(_allArbitrations);
+        alert(`导入完成：新增 ${added}，更新 ${updated}，共 ${j2.count} 条`);
+        renderArbitrations(_allArbitrations);
     }catch(e){
-        if(status) status.textContent = "✗ 导入失败：" + e.message;
+        alert("导入失败：" + e.message);
     }
 }
 
@@ -852,17 +869,13 @@ function initWorldState(){
     document.querySelectorAll(".lv-btn[data-level]").forEach(btn=>{
         btn.addEventListener("click", ()=> setLevelFilter(btn.dataset.level));
     });
-    // 绑定仲裁编辑面板
-    const editBtn = document.getElementById("arbiEditBtn");
-    if(editBtn) editBtn.addEventListener("click", openArbiEditPanel);
-    const editClose = document.getElementById("arbiEditClose");
-    if(editClose) editClose.addEventListener("click", closeArbiEditPanel);
-    const editSave = document.getElementById("arbiEditSave");
-    if(editSave) editSave.addEventListener("click", saveArbiConfig);
-    const editReset = document.getElementById("arbiEditReset");
-    if(editReset) editReset.addEventListener("click", resetArbiConfig);
+    // 绑定仲裁效率批量导入
     const importBtn = document.getElementById("arbiImportBtn");
     if(importBtn) importBtn.addEventListener("click", importArbiConfig);
+    const importToggle = document.getElementById("arbiImportToggle");
+    if(importToggle) importToggle.addEventListener("click", ()=>{
+        document.getElementById("arbiImportWrap")?.classList.toggle("collapsed");
+    });
 
     loadFissures();
     loadArbitrations();

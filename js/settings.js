@@ -1,10 +1,15 @@
 // 设置页：关闭行为、自定义提示音、更新公告
 // 版本号（用于更新公告显示）
-const APP_VERSION = "V1.1.3";
+const APP_VERSION = "V1.1.4";
 
 // 更新公告内容
 const UPDATE_ANNOUNCEMENT = `
-<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.3（2026-10-15）</strong></div>
+<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.4（2026-10-15）</strong></div>
+<ul style="margin:8px 0;padding-left:20px;line-height:2">
+  <li>👆 仲裁效率改为行内编辑：直接点击任意一条仲裁任务即可修改效率上下限和评级，类似 wf.wiki 操作</li>
+  <li>💾 保存后立即生效并持久化，底部仍保留 JSON 批量导入入口</li>
+</ul>
+<div style="margin:10px 0 6px"><strong>📜 正式版 V1.1.3（2026-10-15）</strong></div>
 <ul style="margin:8px 0;padding-left:20px;line-height:2">
   <li>🎯 仲裁评级规则修正：改为按期望效率上限判定——≥700 卓越，≥500 推荐，≥300 普通，无数据 未定</li>
   <li>⚙ 新增仲裁效率编辑面板：可手动修改各节点效率上下限、覆盖评级，或粘贴 JSON 批量导入</li>

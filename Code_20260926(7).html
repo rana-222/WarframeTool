@@ -110,7 +110,6 @@
                                 <button class="lv-btn" data-level="recommended">推荐</button>
                                 <button class="lv-btn" data-level="common">普通</button>
                                 <button class="lv-btn" data-level="undetermined">未定</button>
-                                <button class="lv-btn arbi-edit-btn" id="arbiEditBtn" title="编辑效率与评级">⚙ 编辑</button>
                             </div>
                         </div>
                         <!-- 日历：折叠式翻页条 + 展开选择 -->
@@ -136,26 +135,11 @@
                         <div class="ws-list home-arbi-list" id="arbitrationsList">
                             <div class="ws-empty">加载中…</div>
                         </div>
-                        <!-- 仲裁效率编辑面板 -->
-                        <div class="arbi-edit-panel" id="arbiEditPanel" style="display:none">
-                            <div class="arbi-edit-head">
-                                <span class="arbi-edit-title">⚙ 仲裁效率与评级编辑</span>
-                                <button class="arbi-edit-close" id="arbiEditClose">✕</button>
-                            </div>
-                            <div class="arbi-edit-tip">评级规则：效率上限 ≥700 卓越，≥500 推荐，≥300 普通，无数据 未定。可修改数值或手动覆盖评级，也可在下方粘贴 JSON 批量导入。</div>
-                            <div class="arbi-edit-table-wrap">
-                                <table class="arbi-edit-table" id="arbiEditTable">
-                                    <thead><tr><th>节点</th><th>效率下限</th><th>效率上限</th><th>评级</th></tr></thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>
-                            <div class="arbi-edit-actions">
-                                <button class="arbi-edit-save" id="arbiEditSave">💾 保存</button>
-                                <button class="arbi-edit-reset" id="arbiEditReset">↺ 恢复默认</button>
-                                <span class="arbi-edit-status" id="arbiEditStatus"></span>
-                            </div>
-                            <div class="arbi-import">
-                                <div class="arbi-import-label">批量导入 JSON（格式：<code>{"节点名":{"low":450,"high":550,"level":"recommended"}}</code>，level 可省略）</div>
+                        <!-- 仲裁效率批量导入（默认收起，点图标展开） -->
+                        <div class="arbi-import-wrap collapsed" id="arbiImportWrap">
+                            <button class="arbi-import-toggle" id="arbiImportToggle" title="批量导入效率 JSON">📥</button>
+                            <div class="arbi-import-body">
+                                <div class="arbi-import-label">粘贴 JSON 批量导入（格式：<code>{"节点名":{"low":450,"high":550,"level":"recommended"}}</code>，level 可省略；点击单条任务可直接编辑）</div>
                                 <textarea class="arbi-import-area" id="arbiImportArea" placeholder='{"Callisto":{"low":800,"high":1000}}'></textarea>
                                 <button class="arbi-import-btn" id="arbiImportBtn">导入并合并</button>
                             </div>
@@ -414,7 +398,7 @@
     <script src="js/data.js"></script>
     <script src="js/combobox.js"></script>
     <script src="js/calc.js"></script>
-    <script src="js/worldstate.js?v=7"></script>
+    <script src="js/worldstate.js?v=8"></script>
     <script src="js/relics.js?v=2"></script>
     <script src="js/market.js"></script>
     <script src="js/settings.js"></script>

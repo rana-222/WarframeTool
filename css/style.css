@@ -633,35 +633,43 @@ body.sidebar-collapsed .tab-content-wrap{
 .lv-tag.excellent{background:var(--orange);color:#fff}
 .lv-tag.undetermined{background:#ddd;color:#666}
 
-/* 仲裁编辑面板 */
-.arbi-edit-btn{background:var(--blue)!important;color:#fff!important;margin-left:auto}
-.arbi-edit-panel{
-    margin-top:12px;padding:14px;background:#fafafa;border:2px solid var(--ink);
-    border-radius:12px;box-shadow:3px 3px 0 var(--ink);
+/* 仲裁效率编辑（行内） */
+.arbi-item{cursor:pointer;transition:box-shadow .15s}
+.arbi-item:hover{box-shadow:4px 4px 0 var(--ink)}
+.arbi-item.editing{cursor:default;box-shadow:4px 4px 0 var(--blue)}
+.arbi-item .ws-countdown{pointer-events:none}
+.arbi-inline-edit{
+    margin-top:10px;padding:10px 12px;background:#f5f8ff;border:1.5px dashed var(--blue);
+    border-radius:10px;
 }
-.arbi-edit-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.arbi-edit-title{font-weight:900;font-size:15px}
-.arbi-edit-close{background:none;border:none;font-size:18px;cursor:pointer;color:#666}
-.arbi-edit-tip{font-size:12px;color:#555;margin-bottom:10px;line-height:1.6}
-.arbi-edit-table-wrap{max-height:320px;overflow-y:auto;border:1px solid #ccc;border-radius:8px;background:#fff}
-.arbi-edit-table{width:100%;border-collapse:collapse;font-size:13px}
-.arbi-edit-table th{background:#f0f0f0;padding:6px 8px;text-align:left;position:sticky;top:0;border-bottom:1px solid #ccc}
-.arbi-edit-table td{padding:5px 8px;border-bottom:1px solid #eee}
-.arbi-name{font-weight:700;white-space:nowrap}
-.arbi-input{width:80px;padding:3px 6px;border:1.5px solid var(--ink);border-radius:6px;font-size:13px}
-.arbi-input[type="number"]{width:70px}
-.arbi-edit-actions{margin-top:10px;display:flex;gap:8px;align-items:center}
-.arbi-edit-save,.arbi-edit-reset,.arbi-import-btn{
-    padding:6px 14px;border:2px solid var(--ink);border-radius:8px;
-    font-weight:800;cursor:pointer;background:#fff;
+.arbi-edit-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.arbi-edit-row:last-child{margin-bottom:0}
+.arbi-edit-row label{font-weight:700;font-size:13px;min-width:48px}
+.arbi-input{padding:4px 8px;border:1.5px solid var(--ink);border-radius:6px;font-size:13px;background:#fff}
+.arbi-save-btn,.arbi-cancel-btn{
+    padding:4px 12px;border:1.5px solid var(--ink);border-radius:6px;
+    font-weight:800;cursor:pointer;font-size:13px;
 }
-.arbi-edit-save{background:var(--green);color:#fff}
-.arbi-edit-reset{background:#eee}
+.arbi-save-btn{background:var(--green);color:#fff}
+.arbi-cancel-btn{background:#eee}
 .arbi-edit-status{font-size:12px;color:#0a7;font-weight:700}
-.arbi-import{margin-top:12px;padding-top:10px;border-top:1px dashed #ccc}
-.arbi-import-label{font-size:12px;color:#555;margin-bottom:6px}
-.arbi-import-area{width:100%;height:80px;padding:8px;border:1.5px solid var(--ink);border-radius:8px;font-family:monospace;font-size:12px;resize:vertical}
-.arbi-import-btn{margin-top:6px;background:var(--blue);color:#fff}
+.ws-tag.eff.undef{background:#f0f0f0;color:#999}
+
+/* 仲裁批量导入（默认收起） */
+.arbi-import-wrap{margin-top:8px;position:relative}
+.arbi-import-toggle{
+    border:1.5px solid var(--ink);border-radius:8px;background:#fff;
+    cursor:pointer;font-size:14px;padding:2px 8px;line-height:1;
+    transition:transform .2s;
+}
+.arbi-import-wrap:not(.collapsed) .arbi-import-toggle{transform:rotate(90deg)}
+.arbi-import-wrap.collapsed .arbi-import-body{display:none}
+.arbi-import-body{
+    margin-top:8px;padding:10px;background:#fafafa;border:1.5px dashed #ccc;border-radius:10px;
+}
+.arbi-import-label{font-size:12px;color:#555;margin-bottom:6px;line-height:1.6}
+.arbi-import-area{width:100%;height:60px;padding:8px;border:1.5px solid var(--ink);border-radius:8px;font-family:monospace;font-size:12px;resize:vertical}
+.arbi-import-btn{margin-top:6px;padding:5px 14px;border:2px solid var(--ink);border-radius:8px;font-weight:800;cursor:pointer;background:var(--blue);color:#fff}
 
 .ws-item{
     border:2px solid var(--ink);

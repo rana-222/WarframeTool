@@ -730,6 +730,7 @@ internal static class Program
             // 期望效率（用户可编辑）与评级（由效率推导或用户覆盖）
             int? effLow = null, effHigh = null;
             string level = "undetermined";
+            string? effOverride = null; // 用户手动覆盖的评级（null=按效率自动推导）
             if (!string.IsNullOrEmpty(nameZh))
             {
                 lock (_arbiCfgLock)
@@ -738,6 +739,7 @@ internal static class Program
                     {
                         effLow = cfg.low;
                         effHigh = cfg.high;
+                        effOverride = cfg.level;
                         level = cfg.level ?? DeriveLevel(cfg.high);
                     }
                 }
@@ -749,9 +751,11 @@ internal static class Program
                 end = startTs + _arbysStepSec,
                 nodeKey = nodeKey,
                 node = node,
+                nameZh = nameZh,
                 missionType = missionType,
                 faction = faction,
                 level = level,
+                effOverride = effOverride,
                 effLow = effLow,
                 effHigh = effHigh,
                 isCurrent = (long)i == currentHourIdx
