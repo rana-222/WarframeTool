@@ -29,10 +29,8 @@ internal static class Program
         return new Version(v.Major, v.Minor, Math.Max(v.Build, 0));
     }
 
-    // 设置持久化文件
-    private static string SettingsPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "WarframeTool", "settings.json");
+    // 设置持久化文件（与 exe 同目录）
+    private static string SettingsPath => Path.Combine(AppContext.BaseDirectory, "settings.json");
 
     // 任务类型映射（arbi.wf.wiki 代码 -> 英文名）
     private static readonly Dictionary<string, string> MissionTypeMap = new()
@@ -599,9 +597,8 @@ internal static class Program
     private static Dictionary<string, ArbiNodeCfg> _arbiNodes = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object _arbiCfgLock = new();
 
-    private static string ArbiConfigPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "WarframeTool", "arbi_config.json");
+    // 仲裁效率配置（与 exe 同目录）
+    private static string ArbiConfigPath => Path.Combine(AppContext.BaseDirectory, "arbi_config.json");
 
     // 效率上限 → 评级
     private static string DeriveLevel(int high) => high switch

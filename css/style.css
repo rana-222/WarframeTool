@@ -659,10 +659,9 @@ body.sidebar-collapsed .tab-content-wrap{
 .arbi-import-wrap{margin-top:8px;position:relative}
 .arbi-import-toggle{
     border:1.5px solid var(--ink);border-radius:8px;background:#fff;
-    cursor:pointer;font-size:14px;padding:2px 8px;line-height:1;
-    transition:transform .2s;
+    cursor:pointer;font-size:13px;padding:3px 10px;line-height:1;font-weight:700;
 }
-.arbi-import-wrap:not(.collapsed) .arbi-import-toggle{transform:rotate(90deg)}
+.arbi-import-wrap:not(.collapsed) .arbi-import-toggle{background:var(--green-light)}
 .arbi-import-wrap.collapsed .arbi-import-body{display:none}
 .arbi-import-body{
     margin-top:8px;padding:10px;background:#fafafa;border:1.5px dashed #ccc;border-radius:10px;

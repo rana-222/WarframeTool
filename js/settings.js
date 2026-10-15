@@ -1,10 +1,15 @@
 // 设置页：关闭行为、自定义提示音、更新公告
 // 版本号（用于更新公告显示）
-const APP_VERSION = "V1.1.4";
+const APP_VERSION = "V1.1.5";
 
 // 更新公告内容
 const UPDATE_ANNOUNCEMENT = `
-<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.4（2026-10-15）</strong></div>
+<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.5（2026-10-15）</strong></div>
+<ul style="margin:8px 0;padding-left:20px;line-height:2">
+  <li>📁 安装与配置路径调整：程序安装到本地 <code>version/V{版本号}/</code> 目录，配置文件（settings.json、arbi_config.json）随程序存放，不再写入 AppData</li>
+  <li>🔧 导入按钮改为纯文字「批量导入 ▾」，避免 emoji 不显示</li>
+</ul>
+<div style="margin:10px 0 6px"><strong>📜 正式版 V1.1.4（2026-10-15）</strong></div>
 <ul style="margin:8px 0;padding-left:20px;line-height:2">
   <li>👆 仲裁效率改为行内编辑：直接点击任意一条仲裁任务即可修改效率上下限和评级，类似 wf.wiki 操作</li>
   <li>💾 保存后立即生效并持久化，底部仍保留 JSON 批量导入入口</li>

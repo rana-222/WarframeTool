@@ -86,7 +86,11 @@ internal static class Program
                 statusLabel.Text = "正在解压主程序...";
                 form.Refresh();
 
-                var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WarframeTool");
+                // 安装到安装器所在目录的 version\V{版本号}\ 下
+                var version = Assembly.GetExecutingAssembly().GetName().Version;
+                var verStr = $"V{version.Major}.{version.Minor}.{version.Build}";
+                var baseDir = Path.GetDirectoryName(Application.ExecutablePath)!;
+                var installDir = Path.Combine(baseDir, "version", verStr);
                 Directory.CreateDirectory(installDir);
 
                 // 从嵌入资源提取主程序
