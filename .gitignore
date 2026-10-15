@@ -63,6 +63,9 @@ data/solNodes.json
 WebView2Loader.dll
 *.WebView2/
 
+# ===== 本地版本安装目录 =====
+version/
+
 # ===== 开发临时产物 =====
 test.py
 warframe_worldstate.json
