@@ -72,6 +72,10 @@ internal static class Program
         // 启动后台世界状态轮询（warframestat.us，每 60 秒刷新，前端直接读缓存）
         StartWorldStatePolling();
 
+        // 周期参数独立刷新（每 60 秒，保证 earth/cetus/vallis/cambion 永不过期）
+        _cycleTimer = new System.Threading.Timer(_ => RefreshCycles(), null,
+            TimeSpan.Zero, TimeSpan.FromSeconds(60));
+
         // 预加载仲裁数据
         LoadArbitrationData();
 
@@ -291,6 +295,7 @@ internal static class Program
     private static bool _fissuresStale;             // 裂缝刷新失败标记
     private static System.Threading.Timer? _fissureTimer;
     private static System.Threading.Timer? _wsTimer;
+    private static System.Threading.Timer? _cycleTimer;
 
     // 启动分层后台轮询（立即在后台线程拉取，不阻塞主线程/窗口启动）
     public static void StartWorldStatePolling()
@@ -348,6 +353,48 @@ internal static class Program
 
     // 环境周期：本地计算当前状态与下次切换时间
     // tenno 格式 {id, start, length, dayStart, dayEnd} → {state, expiry}
+    // 周期参数缓存（每次 GET 时据此动态重算，避免缓存内 expiry 过期）
+    private class CycleParams { public double start; public double length; public double dayStart; public double dayEnd; }
+    private static CycleParams? _cetusCycleParams;
+    private static CycleParams? _fortunaCycleParams;
+    private static readonly object _cycleLock = new();
+
+    // 从 tenno daynight 数据提取并缓存周期参数
+    private static void UpdateCycleParams(JsonElement root)
+    {
+        if (!root.TryGetProperty("daynight", out var dn) || !dn.TryGetProperty("data", out var cycles)) return;
+        foreach (var c in cycles.EnumerateArray())
+        {
+            var id = c.GetProperty("id").GetString();
+            var p = new CycleParams
+            {
+                start = c.GetProperty("start").GetDouble(),
+                length = c.GetProperty("length").GetDouble(),
+                dayStart = c.GetProperty("dayStart").GetDouble(),
+                dayEnd = c.GetProperty("dayEnd").GetDouble()
+            };
+            lock (_cycleLock)
+            {
+                if (id == "cetus") _cetusCycleParams = p;
+                else if (id == "fortuna") _fortunaCycleParams = p;
+            }
+        }
+    }
+
+    // 根据缓存的周期参数动态计算当前 state + expiry（每次请求调用，永不过期）
+    private static string CycleJsonFromParams(CycleParams? p, string dayState, string nightState)
+    {
+        if (p == null) return "null";
+        long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        double phase = (now - p.start) % p.length;
+        if (phase < 0) phase += p.length;
+        bool isDay = phase >= p.dayStart && phase < p.dayEnd;
+        double remain = isDay
+            ? p.dayEnd - phase
+            : (phase < p.dayStart ? p.dayStart - phase : p.length - phase + p.dayStart);
+        return $"{{\"state\":\"{(isDay ? dayState : nightState)}\",\"expiry\":{now + (long)remain}}}";
+    }
+
     private static string CycleJson(JsonElement c, string dayState, string nightState)
     {
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -382,34 +429,12 @@ internal static class Program
     private static string ConvertTennoSummary(JsonElement root)
     {
         var sb = new StringBuilder();
-        JsonElement? cetus = null;
-        JsonElement? fortuna = null;
-        if (root.TryGetProperty("daynight", out var dn) && dn.TryGetProperty("data", out var cycles))
-        {
-            foreach (var c in cycles.EnumerateArray())
-            {
-                var id = c.GetProperty("id").GetString();
-                if (id == "cetus") cetus = c;
-                else if (id == "fortuna") fortuna = c;
-            }
-        }
 
-        if (cetus.HasValue)
-        {
-            var c = cetus.Value;
-            sb.Append(",\"earthCycle\":").Append(CycleJson(c, "day", "night"));
-            sb.Append(",\"cetusCycle\":").Append(CycleJson(c, "day", "night"));
-            sb.Append(",\"cambionCycle\":").Append(CycleJson(c, "fass", "vome"));
-        }
-        else
-        {
-            sb.Append(",\"earthCycle\":null,\"cetusCycle\":null,\"cambionCycle\":null");
-        }
+        // 提取周期参数（用于每次 GET 时动态重算，避免 expiry 过期）
+        UpdateCycleParams(root);
 
-        if (fortuna.HasValue)
-            sb.Append(",\"vallisCycle\":").Append(CycleJson(fortuna.Value, "warm", "cold"));
-        else
-            sb.Append(",\"vallisCycle\":null");
+        // 周期部分用占位符，GetWorldState 时动态替换
+        sb.Append("__CYCLES__");
 
         sb.Append(",\"zarimanCycle\":null,\"duviriCycle\":null");
 
@@ -495,6 +520,20 @@ internal static class Program
         return sb.ToString();
     }
 
+    // 周期参数独立刷新：从 tenno 拉取 daynight，更新 cetus/fortuna 参数
+    // （与世界状态摘要解耦，确保即使摘要缓存陈旧，周期倒计时仍准确）
+    private static void RefreshCycles()
+    {
+        try
+        {
+            var json = FetchSource("https://api.tenno.tools/worldstate/pc");
+            if (json == null) return;
+            using var doc = JsonDocument.Parse(json);
+            UpdateCycleParams(doc.RootElement);
+        }
+        catch { /* 失败时保留旧参数，下次重试 */ }
+    }
+
     // ---- 世界状态摘要 + 虚空风暴（低频 10 分钟）：主源 warframestat.us（最全）→ 备源 tenno.tools ----
     // 低频访问主源（10 分钟一次）避免触发 Cloudflare 403/429 限流
     private static void RefreshWorldState()
@@ -509,23 +548,9 @@ internal static class Program
                 var root = doc.RootElement;
 
                 var sb = new StringBuilder();
-                // 地球节点昼夜自 Update38.5 起与夜灵平原同步；火卫二 Fass/Vome 也与平原同步。
-                // 强制 earthCycle=cetusCycle，cambionCycle 由 cetus state 映射（day→fass, night→vome），保证三者一致。
-                var cetusRaw = RawOrNull(root, "cetusCycle");
-                sb.Append(",\"earthCycle\":").Append(cetusRaw);
-                sb.Append(",\"cetusCycle\":").Append(cetusRaw);
-                sb.Append(",\"vallisCycle\":").Append(RawOrNull(root, "vallisCycle"));
-                if (root.TryGetProperty("cetusCycle", out var cetusEl) && cetusEl.ValueKind == JsonValueKind.Object
-                    && cetusEl.TryGetProperty("state", out var csEl) && cetusEl.TryGetProperty("expiry", out var ceEl))
-                {
-                    var st = csEl.GetString();
-                    var cambionState = st == "day" ? "fass" : "vome";
-                    sb.Append(",\"cambionCycle\":{\"state\":\"").Append(cambionState).Append("\",\"expiry\":").Append(ceEl.GetInt64()).Append("}");
-                }
-                else
-                {
-                    sb.Append(",\"cambionCycle\":null");
-                }
+                // 周期部分用占位符，GetWorldState 时根据 tenno daynight 参数动态重算
+                // （warframestat 的 cycle expiry 会随缓存过期，故统一用参数实时计算）
+                sb.Append("__CYCLES__");
                 sb.Append(",\"zarimanCycle\":").Append(RawOrNull(root, "zarimanCycle"));
                 sb.Append(",\"duviriCycle\":").Append(RawOrNull(root, "duviriCycle"));
                 sb.Append(",\"voidTrader\":").Append(RawOrNull(root, "voidTrader"));
@@ -585,7 +610,21 @@ internal static class Program
         lock (_wsLock)
         {
             if (_wsSummaryRaw.Length > 0)
-                return "{\"ok\":true,\"stale\":" + (_wsStale ? "true" : "false") + _wsSummaryRaw + "}";
+            {
+                var summary = _wsSummaryRaw;
+                // 周期参数实时重算（替换占位符 __CYCLES__），保证倒计时永不过期
+                if (summary.Contains("__CYCLES__"))
+                {
+                    CycleParams? cetus, fortuna;
+                    lock (_cycleLock) { cetus = _cetusCycleParams; fortuna = _fortunaCycleParams; }
+                    var earth = CycleJsonFromParams(cetus, "day", "night");
+                    var cambion = CycleJsonFromParams(cetus, "fass", "vome");
+                    var vallis = CycleJsonFromParams(fortuna, "warm", "cold");
+                    var cycles = $",\"earthCycle\":{earth},\"cetusCycle\":{earth},\"vallisCycle\":{vallis},\"cambionCycle\":{cambion}";
+                    summary = summary.Replace("__CYCLES__", cycles);
+                }
+                return "{\"ok\":true,\"stale\":" + (_wsStale ? "true" : "false") + summary + "}";
+            }
         }
         return "{\"ok\":true,\"stale\":true}";
     }

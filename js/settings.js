@@ -1,10 +1,14 @@
 // 设置页：关闭行为、自定义提示音、更新公告
 // 版本号（用于更新公告显示）
-const APP_VERSION = "V1.1.5";
+const APP_VERSION = "V1.1.6";
 
 // 更新公告内容
 const UPDATE_ANNOUNCEMENT = `
-<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.5（2026-10-15）</strong></div>
+<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.6（2026-10-15）</strong></div>
+<ul style="margin:8px 0;padding-left:20px;line-height:2">
+  <li>⏰ 修复奥布山谷/地球/平原/火卫二周期倒计时卡在「已结束」的问题：周期参数改为每次请求时实时计算，不再随世界状态缓存过期</li>
+</ul>
+<div style="margin:10px 0 6px"><strong>📜 正式版 V1.1.5（2026-10-15）</strong></div>
 <ul style="margin:8px 0;padding-left:20px;line-height:2">
   <li>📁 安装与配置路径调整：程序安装到本地 <code>version/V{版本号}/</code> 目录，配置文件（settings.json、arbi_config.json）随程序存放，不再写入 AppData</li>
   <li>🔧 导入按钮改为纯文字「批量导入 ▾」，避免 emoji 不显示</li>
@@ -32,31 +36,6 @@ const UPDATE_ANNOUNCEMENT = `
   <li>🌍 地球节点昼夜与夜灵平原同步（自 Update 38.5 起已统一），不再出现时间不一致</li>
   <li>🟠 新增火卫二魔胎之阈「混乱 / 秩序」周期显示，与平原周期同步</li>
   <li>💎 遗物搜索优化：支持「前纪 A3」「前纪A3」「前A3」等模糊匹配，输入「A3」列出所有含 A3 的遗物</li>
-</ul>
-<div style="margin:10px 0 6px"><strong>📜 正式版 V1.1.0（2026-10-15）</strong></div>
-<ul style="margin:8px 0;padding-left:20px;line-height:2">
-  <li>⚡ 仲裁期望效率数据修正：改用 arbi.guide 权威数据，按地图节点显示每小时精炼精华（VE）期望产量区间（如 ⚡450-550/h）</li>
-  <li>🚀 新增自动更新：启动时自动检测 GitHub 最新版本，有新版时提示下载安装，安装后自动重启</li>
-  <li>🌌 虚空裂缝分组重构：始源星系 / 九重天（风暴）分开显示，两组均保留 普通/钢铁 筛选</li>
-</ul>
-<div style="margin:10px 0 6px"><strong>📜 正式版 V1.0.0（2026-10-02）</strong></div>
-<ul style="margin:8px 0;padding-left:20px;line-height:2">
-  <li>🖥️ 全面转向 WebView2 + C# 桌面应用，移除网页端服务</li>
-  <li>🏠 新增「主页」仪表盘：世界环境周期、虚空商人、每日突击、执政官猎杀、当前仲裁一览</li>
-  <li>⚡ 虚空裂缝与仲裁队列板块融合至主页，不再单独陈列</li>
-  <li>🌐 世界状态数据源切换至 warframestat.us 官方 API，并接入 tenno.tools 备用数据源自动切换，保障数据持续可用</li>
-  <li>📊 仲裁任务评级接入 arbi.wf.wiki 排行榜真实数据（按各任务最高纪录评级）</li>
-  <li>📅 仲裁日历改为折叠式：常驻「« 当前日期 »」翻页条，点 📅 展开日历选日期，小窗口不再挤压队列</li>
-  <li>📖 新增「Wiki 查找」页：应用内直接浏览灰机 Wiki（warframe.huijiwiki.com），支持站内搜索与返回工具</li>
-  <li>📜 裂缝/仲裁列表面板固定高度、内部滚动，页面不再冗长；评级筛选支持一行/两行自适应</li>
-  <li>🚀 数据加载提速：分层轮询（裂缝快速端点 60 秒 / 世界状态 10 分钟），启动数秒内即可看到裂缝数据</li>
-</ul>
-<div style="margin:10px 0 6px"><strong>📜 测试版历史：</strong></div>
-<ul style="margin:8px 0;padding-left:20px;line-height:2;color:var(--muted)">
-  <li>测试版 v0.1 — 裂罅计算器、虚空裂缝、仲裁队列</li>
-  <li>测试版 v0.2 — 订阅提醒、自定义提示音、系统托盘、设置页</li>
-  <li>测试版 v0.3 — 遗物价格计算、物品价格查询（中英双语、中位价、订单一键复制）</li>
-  <li>测试版 v0.4 — 裂缝数据稳定性修复（后台轮询 + 缓存回退）</li>
 </ul>
 `;
 
