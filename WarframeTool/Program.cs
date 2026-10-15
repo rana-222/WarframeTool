@@ -68,6 +68,9 @@ internal static class Program
         // 加载用户设置
         LoadSettings();
 
+        // 加载仲裁效率配置（可编辑，存于 AppData）
+        LoadArbiConfig();
+
         // 启动后台世界状态轮询（warframestat.us，每 60 秒刷新，前端直接读缓存）
         StartWorldStatePolling();
 
@@ -215,6 +218,8 @@ internal static class Program
             data = Encoding.UTF8.GetBytes(GetWfmPrices(ctx.Request.Url?.Query ?? "").GetAwaiter().GetResult());
         else if (path.StartsWith("/api/settings"))
             data = Encoding.UTF8.GetBytes(HandleSettings(ctx.Request.Url?.Query ?? ""));
+        else if (path == "/api/arbi-config")
+            data = Encoding.UTF8.GetBytes(HandleArbiConfig(ctx));
         else
         {
             ctx.Response.StatusCode = 404;
@@ -225,6 +230,48 @@ internal static class Program
         ctx.Response.StatusCode = 200;
         ctx.Response.OutputStream.Write(data, 0, data.Length);
         ctx.Response.Close();
+    }
+
+    // 仲裁效率配置：GET 返回全部节点；POST 用 JSON body 整体替换并持久化
+    private static string HandleArbiConfig(HttpListenerContext ctx)
+    {
+        if (ctx.Request.HttpMethod == "POST")
+        {
+            try
+            {
+                using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
+                var body = reader.ReadToEnd();
+                using var doc = JsonDocument.Parse(body);
+                if (!doc.RootElement.TryGetProperty("nodes", out var nodesEl) || nodesEl.ValueKind != JsonValueKind.Object)
+                    return JsonSerializer.Serialize(new { ok = false, error = "缺少 nodes 字段" });
+
+                var dict = new Dictionary<string, ArbiNodeCfg>(StringComparer.OrdinalIgnoreCase);
+                foreach (var prop in nodesEl.EnumerateObject())
+                {
+                    if (!prop.Value.TryGetProperty("low", out var lo) || !prop.Value.TryGetProperty("high", out var hi)) continue;
+                    var cfg = new ArbiNodeCfg { low = lo.GetInt32(), high = hi.GetInt32() };
+                    if (prop.Value.TryGetProperty("level", out var lv) && lv.ValueKind == JsonValueKind.String)
+                    {
+                        var s = lv.GetString();
+                        if (s is "excellent" or "recommended" or "common" or "undetermined") cfg.level = s;
+                    }
+                    dict[prop.Name] = cfg;
+                }
+                lock (_arbiCfgLock) _arbiNodes = dict;
+                SaveArbiConfig();
+                return JsonSerializer.Serialize(new { ok = true, count = dict.Count });
+            }
+            catch (Exception ex) { return JsonSerializer.Serialize(new { ok = false, error = ex.Message }); }
+        }
+
+        // GET：返回当前配置（含推导后的 level 与 derived 标记）
+        var obj = new Dictionary<string, object>();
+        lock (_arbiCfgLock)
+        {
+            foreach (var (k, v) in _arbiNodes)
+                obj[k] = new { low = v.low, high = v.high, level = v.level ?? DeriveLevel(v.high), derived = v.level == null };
+        }
+        return JsonSerializer.Serialize(new { ok = true, nodes = obj });
     }
 
     // ===== 世界状态：分层轮询 + 双数据源 + 陈旧缓存回退 =====
@@ -246,7 +293,6 @@ internal static class Program
     private static bool _fissuresStale;             // 裂缝刷新失败标记
     private static System.Threading.Timer? _fissureTimer;
     private static System.Threading.Timer? _wsTimer;
-    private static System.Threading.Timer? _arbiTimer;
 
     // 启动分层后台轮询（立即在后台线程拉取，不阻塞主线程/窗口启动）
     public static void StartWorldStatePolling()
@@ -255,9 +301,6 @@ internal static class Program
             TimeSpan.Zero, TimeSpan.FromSeconds(60));
         _wsTimer = new System.Threading.Timer(_ => RefreshWorldState(), null,
             TimeSpan.Zero, TimeSpan.FromMinutes(10));
-        // 仲裁效率评级独立刷新，不阻塞世界状态数据
-        _arbiTimer = new System.Threading.Timer(_ => LoadArbiLeaderboard(), null,
-            TimeSpan.FromSeconds(2), TimeSpan.FromMinutes(10));
     }
 
     // 从根对象提取原始 JSON 文本（缺失时返回 null）
@@ -549,13 +592,28 @@ internal static class Program
         return "{\"ok\":true,\"stale\":true}";
     }
 
-    // ---- 仲裁评级（arbi.wf.wiki leaderboard）----
-    // 每任务类型取 perHour 最高记录的评级 grade（效率数值不再使用排行榜，改用 arbi.guide 期望数据）
-    private static Dictionary<string, string> _arbiLevel = new();
+    // ---- 仲裁效率与评级（可编辑）----
+    // 每个地图节点（中文名）配置：low/high 为每小时精炼精华（VE）期望区间，level 为可选用户覆盖评级。
+    // 评级规则（基于效率上限 high）：≥700 卓越，≥500 推荐，≥300 普通，无数据 未定。
+    private class ArbiNodeCfg { public int low; public int high; public string? level; }
+    private static Dictionary<string, ArbiNodeCfg> _arbiNodes = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object _arbiCfgLock = new();
 
-    // ---- 期望生息效率（arbi.guide 数据：每小时精炼精华 VE 期望区间，按地图节点）----
-    // 仅 arbi.guide 收录的任务类型有数据（生存/防御/拦截/挖掘/中断），未收录任务不显示期望效率
-    private static readonly Dictionary<string, (int low, int high)> ExpectedVe = new(StringComparer.OrdinalIgnoreCase)
+    private static string ArbiConfigPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "WarframeTool", "arbi_config.json");
+
+    // 效率上限 → 评级
+    private static string DeriveLevel(int high) => high switch
+    {
+        >= 700 => "excellent",
+        >= 500 => "recommended",
+        >= 300 => "common",
+        _ => "undetermined"
+    };
+
+    // 内置默认数据（来自 arbi.guide），首次运行或用户重置时使用
+    private static readonly Dictionary<string, (int low, int high)> DefaultArbiVe = new(StringComparer.OrdinalIgnoreCase)
     {
         // 挖掘
         ["Callisto"] = (800, 1000), ["Sinai"] = (400, 500), ["Io"] = (400, 500),
@@ -576,75 +634,59 @@ internal static class Program
         ["Tyana Pass"] = (700, 1000), ["Munio"] = (600, 900), ["Ose"] = (600, 800), ["Oestrus"] = (500, 700),
     };
 
-    // 中文任务名（leaderboard）→ 英文（本地仲裁时间表 MissionTypeMap）
-    private static readonly Dictionary<string, string> MissionZhEn = new()
-    {
-        ["生存"] = "Survival",
-        ["防御"] = "Defense",
-        ["拦截"] = "Interception",
-        ["中断"] = "Disruption",
-        ["镜像防御"] = "Mirror Defense",
-        ["挖掘"] = "Excavation",
-        ["叛逃"] = "Defection",
-        ["虚空洪流"] = "Void Flood",
-        ["虚空决战"] = "Void Armageddon",
-        ["元素转换"] = "Alchemy",
-        ["INFESTED 资源回收"] = "Infested Salvage",
-    };
-
-    // 评级 → 等级：S=传奇，A系=优秀，其余/无数据=普通
-    private static string GradeToLevel(string? grade) => grade switch
-    {
-        "S" => "legendary",
-        "A+" or "A" or "A-" => "excellent",
-        _ => "common"
-    };
-
-    // 拉取 leaderboard 两页（共 75 行），按任务类型聚合出最高 perHour 记录的评级 grade
-    private static void LoadArbiLeaderboard()
+    // 从 AppData 加载仲裁配置；不存在则用内置默认值
+    public static void LoadArbiConfig()
     {
         try
         {
-            // best[任务中文名] = (perHour, grade)（取 perHour 最高纪录的评级）
-            var best = new Dictionary<string, (double perHour, string? grade)>(StringComparer.Ordinal);
-            foreach (var url in new[]
+            if (File.Exists(ArbiConfigPath))
             {
-                "https://arbi.wf.wiki/api/leaderboard",
-                "https://arbi.wf.wiki/api/leaderboard?page=2"
-            })
-            {
-                var json = FetchSource(url);
-                if (json == null) continue;
+                var json = File.ReadAllText(ArbiConfigPath);
                 using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-                // 响应为 {"rows":[...],"total":n} 包装格式（兼容裸数组）
-                var arr = root.ValueKind == JsonValueKind.Array ? root
-                    : root.TryGetProperty("rows", out var rowsEl) ? rowsEl
-                    : default;
-                if (arr.ValueKind != JsonValueKind.Array) continue;
-                foreach (var r in arr.EnumerateArray())
+                if (doc.RootElement.TryGetProperty("nodes", out var nodesEl) && nodesEl.ValueKind == JsonValueKind.Object)
                 {
-                    var missionZh = r.TryGetProperty("missionType", out var mt) ? mt.GetString() : null;
-                    if (string.IsNullOrEmpty(missionZh)) continue;
-                    if (!r.TryGetProperty("perHour", out var ph) || ph.ValueKind != JsonValueKind.Number) continue;
-                    var perHour = ph.GetDouble();
-                    var grade = r.TryGetProperty("grade", out var g) ? g.GetString() : null;
-                    if (!best.TryGetValue(missionZh, out var cur) || perHour > cur.perHour)
-                        best[missionZh] = (perHour, grade);
+                    var dict = new Dictionary<string, ArbiNodeCfg>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var prop in nodesEl.EnumerateObject())
+                    {
+                        if (!prop.Value.TryGetProperty("low", out var lo) || !prop.Value.TryGetProperty("high", out var hi)) continue;
+                        var cfg = new ArbiNodeCfg { low = lo.GetInt32(), high = hi.GetInt32() };
+                        if (prop.Value.TryGetProperty("level", out var lv) && lv.ValueKind == JsonValueKind.String)
+                            cfg.level = lv.GetString();
+                        dict[prop.Name] = cfg;
+                    }
+                    if (dict.Count > 0) { lock (_arbiCfgLock) _arbiNodes = dict; return; }
                 }
             }
-            if (best.Count == 0) return; // 拉取失败时保留旧评级
-
-            // 转换为英文任务名键（引用替换，线程安全）
-            var lv = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var (missionZh, (_, grade)) in best)
-            {
-                if (!MissionZhEn.TryGetValue(missionZh, out var en)) continue;
-                lv[en] = GradeToLevel(grade);
-            }
-            _arbiLevel = lv;
         }
-        catch { /* 失败时保留旧评级 */ }
+        catch { /* 读取失败时回退到默认值 */ }
+        ResetArbiConfigToDefaults();
+    }
+
+    // 恢复内置默认值（不带用户覆盖评级）
+    private static void ResetArbiConfigToDefaults()
+    {
+        var dict = new Dictionary<string, ArbiNodeCfg>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (k, v) in DefaultArbiVe)
+            dict[k] = new ArbiNodeCfg { low = v.low, high = v.high };
+        lock (_arbiCfgLock) _arbiNodes = dict;
+    }
+
+    // 保存配置到 AppData
+    private static void SaveArbiConfig()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(ArbiConfigPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var obj = new Dictionary<string, object>();
+            lock (_arbiCfgLock)
+            {
+                foreach (var (k, v) in _arbiNodes)
+                    obj[k] = new { low = v.low, high = v.high, level = v.level };
+            }
+            File.WriteAllText(ArbiConfigPath, JsonSerializer.Serialize(new { nodes = obj }));
+        }
+        catch { /* 忽略保存错误 */ }
     }
 
     private static string GetArbitrations()
@@ -685,14 +727,20 @@ internal static class Program
                 node = string.IsNullOrEmpty(sysZh) ? (string.IsNullOrEmpty(nameZh) ? nodeKey : nameZh) : $"{nameZh} ({sysZh})";
             }
 
-            // 评级（arbi.wf.wiki leaderboard grade，无数据默认普通）
-            // 期望效率（arbi.guide：按地图节点的每小时精炼精华期望区间，未收录则不显示）
-            string level = _arbiLevel.TryGetValue(missionType, out var lv2) ? lv2 : "common";
+            // 期望效率（用户可编辑）与评级（由效率推导或用户覆盖）
             int? effLow = null, effHigh = null;
-            if (!string.IsNullOrEmpty(nameZh) && ExpectedVe.TryGetValue(nameZh, out var ve))
+            string level = "undetermined";
+            if (!string.IsNullOrEmpty(nameZh))
             {
-                effLow = ve.low;
-                effHigh = ve.high;
+                lock (_arbiCfgLock)
+                {
+                    if (_arbiNodes.TryGetValue(nameZh, out var cfg))
+                    {
+                        effLow = cfg.low;
+                        effHigh = cfg.high;
+                        level = cfg.level ?? DeriveLevel(cfg.high);
+                    }
+                }
             }
 
             result.Add(new

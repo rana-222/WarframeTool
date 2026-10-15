@@ -1,10 +1,16 @@
 // 设置页：关闭行为、自定义提示音、更新公告
 // 版本号（用于更新公告显示）
-const APP_VERSION = "V1.1.2";
+const APP_VERSION = "V1.1.3";
 
 // 更新公告内容
 const UPDATE_ANNOUNCEMENT = `
-<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.2（2026-10-15）</strong></div>
+<div style="margin-bottom:10px"><strong>🎉 正式版 V1.1.3（2026-10-15）</strong></div>
+<ul style="margin:8px 0;padding-left:20px;line-height:2">
+  <li>🎯 仲裁评级规则修正：改为按期望效率上限判定——≥700 卓越，≥500 推荐，≥300 普通，无数据 未定</li>
+  <li>⚙ 新增仲裁效率编辑面板：可手动修改各节点效率上下限、覆盖评级，或粘贴 JSON 批量导入</li>
+  <li>💾 配置持久化保存至本地（AppData），重启不丢失，支持一键恢复默认</li>
+</ul>
+<div style="margin:10px 0 6px"><strong>📜 正式版 V1.1.2（2026-10-15）</strong></div>
 <ul style="margin:8px 0;padding-left:20px;line-height:2">
   <li>⚡ Warframe Market 价格查询大幅提速：从逐个串行改为并行抓取（全局限流 3 req/sec），遗物 6 件奖励+本体从 20-30 秒降至约 2-5 秒</li>
   <li>🚀 启动加载提速：裂缝约 0.6 秒就绪，世界状态（周期/突击/虚空风暴）秒级返回；数据源超时从 30 秒降至 10 秒</li>

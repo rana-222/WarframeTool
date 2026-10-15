@@ -281,11 +281,11 @@ function renderFissures(data){
 }
 
 // ============ 仲裁评级 ============
-// 评级由后端根据 arbi.wf.wiki 排行榜各任务类型最高纪录给出：传奇(S) / 优秀(A系) / 普通(无数据或F)
-// 期望效率由后端按 arbi.guide 各地图节点的每小时精炼精华（VE）期望区间给出（effLow/effHigh，未收录为空）
-const LEVEL_LABEL = {common:"普通", excellent:"优秀", legendary:"传奇"};
+// 评级规则（基于每小时精炼精华 VE 期望上限）：≥700 卓越，≥500 推荐，≥300 普通，无数据 未定。
+// 用户可在编辑面板导入效率数据或手动覆盖评级。
+const LEVEL_LABEL = {excellent:"卓越", recommended:"推荐", common:"普通", undetermined:"未定"};
 function arbiLevel(a){
-    return a.level || "common";
+    return a.level || "undetermined";
 }
 
 // ============ 仲裁日历状态 ============
@@ -458,6 +458,161 @@ function setLevelFilter(level){
         btn.classList.toggle("active", btn.dataset.level === level);
     });
     renderArbitrations(_allArbitrations);
+}
+
+// ============ 仲裁效率编辑面板 ============
+const ARBI_LEVEL_OPTS = [
+    {value:"", label:"自动（按效率推导）"},
+    {value:"excellent", label:"卓越"},
+    {value:"recommended", label:"推荐"},
+    {value:"common", label:"普通"},
+    {value:"undetermined", label:"未定"}
+];
+let _arbiCfgCache = {};   // 当前配置缓存 {节点: {low,high,level,derived}}
+
+async function openArbiEditPanel(){
+    const panel = document.getElementById("arbiEditPanel");
+    if(!panel) return;
+    panel.style.display = "block";
+    await loadArbiConfigToTable();
+}
+function closeArbiEditPanel(){
+    const panel = document.getElementById("arbiEditPanel");
+    if(panel) panel.style.display = "none";
+}
+
+async function loadArbiConfigToTable(){
+    const tbody = document.querySelector("#arbiEditTable tbody");
+    if(!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:12px">加载中…</td></tr>';
+    try{
+        const resp = await fetch("/api/arbi-config");
+        const json = await resp.json();
+        if(!json.ok) throw new Error(json.error || "加载失败");
+        _arbiCfgCache = json.nodes;
+        const names = Object.keys(json.nodes).sort();
+        if(names.length === 0){ tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:12px">暂无数据，可在下方导入</td></tr>'; return; }
+        tbody.innerHTML = names.map(name => {
+            const n = json.nodes[name];
+            const lv = n.level || "";
+            const opts = ARBI_LEVEL_OPTS.map(o => `<option value="${o.value}" ${o.value===lv?"selected":""}>${o.label}</option>`).join("");
+            return `<tr data-name="${name}">
+                <td class="arbi-name">${name}</td>
+                <td><input type="number" class="arbi-input" data-field="low" value="${n.low}" min="0"></td>
+                <td><input type="number" class="arbi-input" data-field="high" value="${n.high}" min="0"></td>
+                <td><select class="arbi-input" data-field="level">${opts}</select></td>
+            </tr>`;
+        }).join("");
+    }catch(e){
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:12px;color:#c00">加载失败：${e.message}</td></tr>`;
+    }
+}
+
+function collectArbiConfigFromTable(){
+    const rows = document.querySelectorAll("#arbiEditTable tbody tr[data-name]");
+    const nodes = {};
+    rows.forEach(row => {
+        const name = row.dataset.name;
+        const low = parseInt(row.querySelector('[data-field="low"]').value) || 0;
+        const high = parseInt(row.querySelector('[data-field="high"]').value) || 0;
+        const level = row.querySelector('[data-field="level"]').value;
+        const entry = {low, high};
+        if(level) entry.level = level;
+        nodes[name] = entry;
+    });
+    return nodes;
+}
+
+async function saveArbiConfig(){
+    const status = document.getElementById("arbiEditStatus");
+    if(status) status.textContent = "保存中…";
+    try{
+        const nodes = collectArbiConfigFromTable();
+        const resp = await fetch("/api/arbi-config", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({nodes})
+        });
+        const json = await resp.json();
+        if(!json.ok) throw new Error(json.error || "保存失败");
+        if(status) status.textContent = `✓ 已保存 ${json.count} 条`;
+        // 刷新仲裁列表
+        if(_allArbitrations.length) renderArbitrations(_allArbitrations);
+    }catch(e){
+        if(status) status.textContent = "✗ " + e.message;
+    }
+}
+
+async function resetArbiConfig(){
+    if(!confirm("确定恢复为内置默认效率数据？当前自定义将被覆盖。")) return;
+    // 重新加载默认：通过 GET 拿到当前（若用户改过则已是用户的），这里直接用内置默认重存
+    // 简化：删除配置文件不可行，改为发空 nodes 不行。用前端内置默认覆盖。
+    const status = document.getElementById("arbiEditStatus");
+    if(status) status.textContent = "恢复中…";
+    try{
+        // 从后端拿当前，然后用默认效率值覆盖（保留节点结构）
+        // 由于后端没有 reset 端点，这里直接用前端默认数据 POST
+        const resp = await fetch("/api/arbi-config");
+        const json = await resp.json();
+        const cur = json.nodes || {};
+        const defaults = {
+            "Callisto":[800,1000],"Sinai":[400,500],"Io":[400,500],"Umbriel":[400,700],
+            "Stephano":[450,550],"Alator":[800,1000],"Cytherean":[800,1000],"Xini":[800,1000],
+            "Mithra":[600,750],"Berehynia":[200,400],"Gulliver":[400,500],"Romula":[400,500],
+            "Proteus":[400,500],"Casta":[450,550],"Seimeni":[450,550],"Hydron":[400,550],
+            "Helene":[400,550],"Paimon":[450,550],"Larzac":[450,550],"Akkad":[450,550],
+            "Kala-Azar":[450,550],"Coba":[400,550],"Lith":[400,550],"Hyf":[450,600],
+            "Stöfler":[400,500],"Kadesh":[450,550],"Spear":[450,550],"Taranis":[450,550],
+            "Belenus":[450,550],"Cinxia":[600,800],"Odin":[500,700],"Sechura":[450,550],
+            "Tessera":[450,550],"Outer Terminus":[450,550],"Cerberus":[450,550],"Rhea":[550,625],
+            "Larez":[550,625],"Larezzz":[550,625],"Sangeru":[550,625],"Gaia":[400,500],
+            "Tyana Pass":[700,1000],"Munio":[600,900],"Ose":[600,800],"Oestrus":[500,700]
+        };
+        const nodes = {};
+        for(const [k,[low,high]] of Object.entries(defaults)) nodes[k] = {low, high};
+        const r2 = await fetch("/api/arbi-config", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({nodes})});
+        const j2 = await r2.json();
+        if(!j2.ok) throw new Error(j2.error);
+        await loadArbiConfigToTable();
+        if(status) status.textContent = `✓ 已恢复默认（${j2.count} 条）`;
+        if(_allArbitrations.length) renderArbitrations(_allArbitrations);
+    }catch(e){
+        if(status) status.textContent = "✗ " + e.message;
+    }
+}
+
+async function importArbiConfig(){
+    const area = document.getElementById("arbiImportArea");
+    const status = document.getElementById("arbiEditStatus");
+    if(!area) return;
+    const text = area.value.trim();
+    if(!text){ if(status) status.textContent = "请粘贴 JSON"; return; }
+    try{
+        const imported = JSON.parse(text);
+        if(typeof imported !== "object") throw new Error("JSON 必须是对象");
+        // 合并到当前表格数据
+        const current = collectArbiConfigFromTable();
+        let added = 0, updated = 0;
+        for(const [name, val] of Object.entries(imported)){
+            if(!val || typeof val !== "object") continue;
+            const low = parseInt(val.low), high = parseInt(val.high);
+            if(isNaN(low) || isNaN(high)) continue;
+            const entry = {low, high};
+            if(val.level && ["excellent","recommended","common","undetermined"].includes(val.level))
+                entry.level = val.level;
+            if(current[name]) updated++; else added++;
+            current[name] = entry;
+        }
+        const resp = await fetch("/api/arbi-config", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({nodes:current})});
+        const json = await resp.json();
+        if(!json.ok) throw new Error(json.error);
+        await loadArbiConfigToTable();
+        area.value = "";
+        if(status) status.textContent = `✓ 导入完成（新增 ${added}，更新 ${updated}，共 ${json.count} 条）`;
+        if(_allArbitrations.length) renderArbitrations(_allArbitrations);
+    }catch(e){
+        if(status) status.textContent = "✗ 导入失败：" + e.message;
+    }
 }
 
 // ============ 主页仪表盘：世界状态卡片 ============
@@ -694,9 +849,20 @@ function initWorldState(){
         setCalendarExpanded(wrap ? wrap.classList.contains("collapsed") : false);
     });
     // 绑定等级筛选
-    document.querySelectorAll(".lv-btn").forEach(btn=>{
+    document.querySelectorAll(".lv-btn[data-level]").forEach(btn=>{
         btn.addEventListener("click", ()=> setLevelFilter(btn.dataset.level));
     });
+    // 绑定仲裁编辑面板
+    const editBtn = document.getElementById("arbiEditBtn");
+    if(editBtn) editBtn.addEventListener("click", openArbiEditPanel);
+    const editClose = document.getElementById("arbiEditClose");
+    if(editClose) editClose.addEventListener("click", closeArbiEditPanel);
+    const editSave = document.getElementById("arbiEditSave");
+    if(editSave) editSave.addEventListener("click", saveArbiConfig);
+    const editReset = document.getElementById("arbiEditReset");
+    if(editReset) editReset.addEventListener("click", resetArbiConfig);
+    const importBtn = document.getElementById("arbiImportBtn");
+    if(importBtn) importBtn.addEventListener("click", importArbiConfig);
 
     loadFissures();
     loadArbitrations();
